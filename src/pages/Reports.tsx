@@ -13,6 +13,15 @@ export const Reports: React.FC = () => {
 
   const sortedTransactions = [...transactions].sort((a, b) => new Date(b.date).getTime() - new Date(a.date).getTime());
 
+  const downloadFile = (file: File) => {
+    const url = URL.createObjectURL(file);
+    const a = document.createElement('a');
+    a.href = url;
+    a.download = file.name;
+    a.click();
+    URL.revokeObjectURL(url);
+  };
+
   const shareFile = async (file: File) => {
     if (navigator.canShare && navigator.canShare({ files: [file] })) {
       try {
@@ -23,14 +32,10 @@ export const Reports: React.FC = () => {
         });
       } catch (error) {
         console.error('Error sharing', error);
+        downloadFile(file);
       }
     } else {
-      const url = URL.createObjectURL(file);
-      const a = document.createElement('a');
-      a.href = url;
-      a.download = file.name;
-      a.click();
-      URL.revokeObjectURL(url);
+      downloadFile(file);
     }
   };
 
