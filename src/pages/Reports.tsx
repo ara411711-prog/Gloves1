@@ -5,7 +5,7 @@ import { format } from 'date-fns';
 import { ar } from 'date-fns/locale';
 import * as XLSX from 'xlsx';
 import jsPDF from 'jspdf';
-import html2canvas from 'html2canvas';
+import { toPng } from 'html-to-image';
 
 export const Reports: React.FC = () => {
   const { transactions, products, entities } = useInventory();
@@ -35,42 +35,86 @@ export const Reports: React.FC = () => {
   };
 
   const exportExcel = () => {
-    const data = sortedTransactions.map(t => {
+    const wb = XLSX.utils.book_new();
+    
+    const excelData = [
+      ['نظام إدارة المخزون'],
+      ['تقرير العمليات الشامل'],
+      ['تاريخ التقرير:', format(new Date(), 'yyyy/MM/dd hh:mm a', { locale: ar })],
+      [],
+      ['التاريخ', 'العملية', 'المنتج', 'الجهة', 'الكمية', 'السعر', 'الإجمالي']
+    ];
+
+    sortedTransactions.forEach(t => {
       const product = products.find(p => p.id === t.productId);
       const entity = entities.find(e => e.id === t.entityId);
-      return {
-        'التاريخ': format(new Date(t.date), 'yyyy/MM/dd hh:mm a', { locale: ar }),
-        'العملية': t.type === 'out' ? 'بيع' : 'شراء',
-        'المنتج': product?.name || 'منتج محذوف',
-        'الجهة': entity?.name || 'غير محدد',
-        'الكمية': t.quantity,
-        'السعر': Math.round(t.price),
-        'الإجمالي': Math.round(t.total),
-      };
+      excelData.push([
+        format(new Date(t.date), 'yyyy/MM/dd hh:mm a', { locale: ar }),
+        t.type === 'out' ? 'بيع' : 'شراء',
+        product?.name || 'منتج محذوف',
+        entity?.name || 'غير محدد',
+        t.quantity,
+        Math.round(t.price),
+        Math.round(t.total)
+      ]);
     });
+
+    const ws = XLSX.utils.aoa_to_sheet(excelData);
     
-    const ws = XLSX.utils.json_to_sheet(data);
-    const wb = XLSX.utils.book_new();
+    ws['!cols'] = [
+      { wch: 20 },
+      { wch: 10 },
+      { wch: 25 },
+      { wch: 25 },
+      { wch: 10 },
+      { wch: 15 },
+      { wch: 15 },
+    ];
+
+    ws['!merges'] = [
+      { s: { r: 0, c: 0 }, e: { r: 0, c: 6 } },
+      { s: { r: 1, c: 0 }, e: { r: 1, c: 6 } },
+    ];
+    
     XLSX.utils.book_append_sheet(wb, ws, "العمليات");
-    
     const excelBuffer = XLSX.write(wb, { bookType: 'xlsx', type: 'array' });
     const file = new File([excelBuffer], `تقرير_العمليات_الشامل.xlsx`, { type: 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet' });
     shareFile(file);
   };
 
+  const CHUNK_SIZE = 20;
+  const chunks = [];
+  for (let i = 0; i < sortedTransactions.length; i += CHUNK_SIZE) {
+    chunks.push(sortedTransactions.slice(i, i + CHUNK_SIZE));
+  }
+  if (chunks.length === 0) chunks.push([]);
+
   const exportPDF = async () => {
     setIsExporting(true);
     try {
-      const tableElement = document.getElementById('all-transactions-table-container');
-      if (!tableElement) return;
-
-      const canvas = await html2canvas(tableElement, { scale: 2, backgroundColor: '#0f172a' });
-      const imgData = canvas.toDataURL('image/png');
       const pdf = new jsPDF('p', 'mm', 'a4');
       const pdfWidth = pdf.internal.pageSize.getWidth();
-      const pdfHeight = (canvas.height * pdfWidth) / canvas.width;
       
-      pdf.addImage(imgData, 'PNG', 0, 0, pdfWidth, pdfHeight);
+      for (let i = 0; i < chunks.length; i++) {
+        const pageElement = document.getElementById(`pdf-page-${i}`);
+        if (!pageElement) continue;
+
+        const dataUrl = await toPng(pageElement, { 
+          quality: 1, 
+          pixelRatio: 2,
+          style: { transform: 'scale(1)', transformOrigin: 'top left' }
+        });
+        
+        const imgProps = pdf.getImageProperties(dataUrl);
+        const imgHeight = (imgProps.height * pdfWidth) / imgProps.width;
+        
+        if (i > 0) {
+          pdf.addPage();
+        }
+        
+        pdf.addImage(dataUrl, 'PNG', 0, 0, pdfWidth, imgHeight);
+      }
+
       const pdfBlob = pdf.output('blob');
       const file = new File([pdfBlob], `تقرير_العمليات_الشامل.pdf`, { type: 'application/pdf' });
       shareFile(file);
@@ -113,7 +157,7 @@ export const Reports: React.FC = () => {
             <p>لا توجد عمليات مسجلة حتى الآن</p>
           </div>
         ) : (
-          <div id="all-transactions-table-container" className="bg-slate-900 rounded-2xl border border-slate-800 overflow-hidden p-2">
+          <div className="bg-slate-900 rounded-2xl border border-slate-800 overflow-hidden p-2">
             <div className="overflow-x-auto">
               <table className="w-full text-right text-sm">
                 <thead className="bg-slate-800 text-slate-300">
@@ -170,6 +214,92 @@ export const Reports: React.FC = () => {
             </div>
           </div>
         )}
+      </div>
+
+      {/* Hidden PDF Pages */}
+      <div style={{ position: 'absolute', top: '-9999px', left: '-9999px', zIndex: -1000 }}>
+        {chunks.map((chunk, pageIndex) => (
+          <div 
+            key={pageIndex} 
+            id={`pdf-page-${pageIndex}`} 
+            style={{ 
+              width: '800px', 
+              minHeight: '1131px',
+              padding: '40px', 
+              backgroundColor: '#ffffff', 
+              color: '#000000', 
+              direction: 'rtl',
+              fontFamily: 'sans-serif'
+            }}
+          >
+            <div style={{ display: 'flex', justifyContent: 'space-between', borderBottom: '2px solid #e2e8f0', paddingBottom: '16px', marginBottom: '24px' }}>
+              <div>
+                <h1 style={{ fontSize: '24px', fontWeight: 'bold', color: '#1e293b', margin: 0 }}>نظام إدارة المخزون</h1>
+                <p style={{ fontSize: '14px', color: '#64748b', margin: '4px 0 0 0' }}>تقرير العمليات الشامل</p>
+              </div>
+              <div style={{ textAlign: 'left' }}>
+                <p style={{ fontSize: '14px', color: '#64748b', margin: 0 }}>تاريخ التقرير:</p>
+                <p style={{ fontSize: '14px', fontWeight: 'bold', color: '#1e293b', margin: '4px 0 0 0' }}>{format(new Date(), 'yyyy/MM/dd', { locale: ar })}</p>
+                <p style={{ fontSize: '12px', color: '#94a3b8', margin: '4px 0 0 0' }}>صفحة {pageIndex + 1} من {chunks.length}</p>
+              </div>
+            </div>
+
+            <table style={{ width: '100%', borderCollapse: 'collapse', textAlign: 'right', fontSize: '12px' }}>
+              <thead>
+                <tr style={{ backgroundColor: '#f1f5f9', color: '#334155' }}>
+                  <th style={{ padding: '12px', borderBottom: '1px solid #cbd5e1', fontWeight: 'bold' }}>التاريخ</th>
+                  <th style={{ padding: '12px', borderBottom: '1px solid #cbd5e1', fontWeight: 'bold' }}>العملية</th>
+                  <th style={{ padding: '12px', borderBottom: '1px solid #cbd5e1', fontWeight: 'bold' }}>المنتج</th>
+                  <th style={{ padding: '12px', borderBottom: '1px solid #cbd5e1', fontWeight: 'bold' }}>الجهة</th>
+                  <th style={{ padding: '12px', borderBottom: '1px solid #cbd5e1', fontWeight: 'bold' }}>الكمية</th>
+                  <th style={{ padding: '12px', borderBottom: '1px solid #cbd5e1', fontWeight: 'bold' }}>السعر</th>
+                  <th style={{ padding: '12px', borderBottom: '1px solid #cbd5e1', fontWeight: 'bold' }}>الإجمالي</th>
+                </tr>
+              </thead>
+              <tbody>
+                {chunk.map((t, i) => {
+                  const product = products.find(p => p.id === t.productId);
+                  const entity = entities.find(e => e.id === t.entityId);
+                  const isOut = t.type === 'out';
+                  return (
+                    <tr key={t.id} style={{ backgroundColor: i % 2 === 0 ? '#ffffff' : '#f8fafc' }}>
+                      <td style={{ padding: '12px', borderBottom: '1px solid #e2e8f0', color: '#475569' }}>
+                        {format(new Date(t.date), 'yyyy/MM/dd hh:mm a', { locale: ar })}
+                      </td>
+                      <td style={{ padding: '12px', borderBottom: '1px solid #e2e8f0', color: isOut ? '#ea580c' : '#16a34a', fontWeight: 'bold' }}>
+                        {isOut ? 'بيع' : 'شراء'}
+                      </td>
+                      <td style={{ padding: '12px', borderBottom: '1px solid #e2e8f0', color: '#1e293b', fontWeight: 'bold' }}>
+                        {product?.name || 'منتج محذوف'}
+                      </td>
+                      <td style={{ padding: '12px', borderBottom: '1px solid #e2e8f0', color: '#475569' }}>
+                        {entity?.name || '-'}
+                      </td>
+                      <td style={{ padding: '12px', borderBottom: '1px solid #e2e8f0', color: '#1e293b' }} dir="ltr">
+                        {t.quantity}
+                      </td>
+                      <td style={{ padding: '12px', borderBottom: '1px solid #e2e8f0', color: '#1e293b' }} dir="ltr">
+                        {Math.round(t.price)} ج.م
+                      </td>
+                      <td style={{ padding: '12px', borderBottom: '1px solid #e2e8f0', color: '#1e293b', fontWeight: 'bold' }} dir="ltr">
+                        {Math.round(t.total)} ج.م
+                      </td>
+                    </tr>
+                  );
+                })}
+              </tbody>
+            </table>
+            
+            {pageIndex === chunks.length - 1 && (
+              <div style={{ marginTop: '32px', padding: '16px', backgroundColor: '#f8fafc', borderRadius: '8px', border: '1px solid #e2e8f0' }}>
+                <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+                  <span style={{ fontSize: '14px', fontWeight: 'bold', color: '#334155' }}>إجمالي عدد العمليات:</span>
+                  <span style={{ fontSize: '16px', fontWeight: 'bold', color: '#0f172a' }}>{sortedTransactions.length}</span>
+                </div>
+              </div>
+            )}
+          </div>
+        ))}
       </div>
     </div>
   );
