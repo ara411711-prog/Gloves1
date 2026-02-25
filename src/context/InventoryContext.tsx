@@ -1,6 +1,6 @@
 import React, { createContext, useContext, useEffect, useState } from 'react';
 import { ref, onValue, set, push, update, remove } from 'firebase/database';
-import { db } from '../lib/firebase';
+import { db } from '../components/lib/firebase';
 import { Product, Transaction, Entity } from '../types';
 
 type InventoryContextType = {
