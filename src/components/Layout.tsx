@@ -12,9 +12,9 @@ export const Layout: React.FC = () => {
   ];
 
   return (
-    <div className="h-screen w-full bg-slate-950 text-slate-100 font-sans overflow-hidden flex flex-col" dir="rtl">
+    <div className="h-[100dvh] w-full bg-slate-950 text-slate-100 font-sans overflow-hidden flex flex-col" dir="rtl">
       {/* Main Content Area */}
-      <main className="flex-1 w-full h-full relative bg-slate-950 overflow-y-auto">
+      <main className="flex-1 w-full relative bg-slate-950 overflow-hidden">
         <Outlet />
       </main>
 

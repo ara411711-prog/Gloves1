@@ -14,7 +14,7 @@ export const Dashboard: React.FC = () => {
   const recentTransactions = transactions.slice(0, 5);
 
   return (
-    <div className="flex flex-col h-full bg-slate-950 pb-20">
+    <div className="flex flex-col h-full bg-slate-950">
       {/* Header */}
       <div className="bg-slate-900 text-slate-100 p-4 pt-6 rounded-b-3xl shadow-md z-10 shrink-0 relative border-b border-slate-800">
         <header className="flex justify-between items-center mb-6">

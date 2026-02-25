@@ -82,7 +82,7 @@ export const Products: React.FC = () => {
   };
 
   return (
-    <div className="flex flex-col h-full bg-slate-950 pb-20">
+    <div className="flex flex-col h-full bg-slate-950">
       {/* Header */}
       <div className="bg-slate-900 text-slate-100 p-4 pt-6 rounded-b-3xl shadow-md z-10 shrink-0 border-b border-slate-800">
         <div className="flex justify-between items-center mb-6">
