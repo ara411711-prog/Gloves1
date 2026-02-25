@@ -1,16 +1,8 @@
 import React from 'react';
 import { Outlet, NavLink } from 'react-router-dom';
 import { Home, Package, ArrowRightLeft, Users, FileText } from 'lucide-react';
-import { useInventory } from '../context/InventoryContext';
-import { LoadingScreen } from './LoadingScreen';
 
 export const Layout: React.FC = () => {
-  const { loading } = useInventory();
-
-  if (loading) {
-    return <LoadingScreen />;
-  }
-
   const navItems = [
     { to: '/', icon: Home, label: 'الرئيسية' },
     { to: '/products', icon: Package, label: 'المنتجات' },
