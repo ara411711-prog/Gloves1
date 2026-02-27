@@ -34,7 +34,6 @@ export type Entity = {
   email?: string;
   address?: string;
   type: 'supplier' | 'customer';
-  balance: number; // Positive means they owe us (customer), negative means we owe them (supplier)
   createdAt: number;
   updatedAt: number;
 };

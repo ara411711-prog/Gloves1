@@ -3,6 +3,9 @@ import { useInventory } from '../context/InventoryContext';
 import { Link } from 'react-router-dom';
 import { Plus, Edit2, Trash2, Users, Search, X, Phone, MapPin, MessageCircle, ChevronLeft } from 'lucide-react';
 import { Entity } from '../types';
+import { ConfirmModal } from '../components/ConfirmModal';
+import { parseNumberInput } from '../utils/numbers';
+import { useAndroidBack } from '../hooks/useAndroidBack';
 
 export const Entities: React.FC = () => {
   const { entities, addEntity, updateEntity, deleteEntity } = useInventory();
@@ -10,6 +13,7 @@ export const Entities: React.FC = () => {
   const [searchQuery, setSearchQuery] = useState('');
   const [activeTab, setActiveTab] = useState<'customer' | 'supplier'>('customer');
   const [editingEntity, setEditingEntity] = useState<Entity | null>(null);
+  const [entityToDelete, setEntityToDelete] = useState<string | null>(null);
 
   const [formData, setFormData] = useState({
     name: '',
@@ -17,7 +21,6 @@ export const Entities: React.FC = () => {
     email: '',
     address: '',
     type: 'customer' as 'customer' | 'supplier',
-    balance: '0',
   });
 
   const filteredEntities = entities.filter(e => 
@@ -35,7 +38,6 @@ export const Entities: React.FC = () => {
         email: entity.email || '',
         address: entity.address || '',
         type: entity.type,
-        balance: entity.balance.toString(),
       });
     } else {
       setEditingEntity(null);
@@ -45,7 +47,6 @@ export const Entities: React.FC = () => {
         email: '',
         address: '',
         type: activeTab,
-        balance: '0',
       });
     }
     setIsModalOpen(true);
@@ -59,7 +60,6 @@ export const Entities: React.FC = () => {
       email: formData.email,
       address: formData.address,
       type: formData.type,
-      balance: Math.round(parseFloat(formData.balance) || 0),
     };
 
     if (editingEntity) {
@@ -70,44 +70,53 @@ export const Entities: React.FC = () => {
     setIsModalOpen(false);
   };
 
-  const handleDelete = async (id: string) => {
-    if (window.confirm('هل أنت متأكد من حذف هذه الجهة؟')) {
-      await deleteEntity(id);
+  const handleDelete = async () => {
+    if (entityToDelete) {
+      await deleteEntity(entityToDelete);
+      setEntityToDelete(null);
     }
   };
 
+  useAndroidBack(() => {
+    setIsModalOpen(false);
+    return true;
+  }, isModalOpen);
+
   return (
-    <div className="flex flex-col h-full bg-slate-950">
+    <div className="flex flex-col h-full bg-slate-950 relative">
+      {/* Background Glow */}
+      <div className="absolute top-0 left-1/2 -translate-x-1/2 w-full max-w-lg h-64 bg-blue-500/10 blur-[100px] rounded-full pointer-events-none"></div>
+
       {/* Header */}
-      <div className="bg-slate-900 text-slate-100 p-4 pt-6 rounded-b-3xl shadow-md z-10 shrink-0 border-b border-slate-800">
-        <div className="flex justify-between items-center mb-6">
-          <h1 className="text-2xl font-bold">الجهات</h1>
+      <div className="glass-panel text-slate-100 p-4 pt-6 rounded-b-[2.5rem] z-10 shrink-0 border-t-0 border-x-0 relative">
+        <div className="flex justify-between items-center mb-6 px-2">
+          <h1 className="text-3xl font-black tracking-tight text-white">الجهات</h1>
           <button 
             onClick={() => handleOpenModal()}
-            className="bg-indigo-600 hover:bg-indigo-500 text-white p-2 rounded-xl transition-colors shadow-sm"
+            className="bg-sky-600 hover:bg-indigo-500 text-white p-3 rounded-2xl transition-colors shadow-lg shadow-indigo-500/20 active:scale-95"
           >
             <Plus className="w-6 h-6" />
           </button>
         </div>
         
         {/* Tabs */}
-        <div className="flex bg-slate-800 p-1 rounded-xl mb-4 border border-slate-700">
+        <div className="flex bg-black/20 p-1.5 rounded-2xl mb-4 border border-white/5 backdrop-blur-md">
           <button
             onClick={() => setActiveTab('customer')}
-            className={`flex-1 py-2 text-sm font-medium rounded-lg transition-colors ${activeTab === 'customer' ? 'bg-slate-700 text-slate-100 shadow-sm' : 'text-slate-400 hover:text-slate-200'}`}
+            className={`flex-1 py-2.5 text-sm font-bold rounded-xl transition-all ${activeTab === 'customer' ? 'bg-indigo-500/20 text-indigo-300 shadow-sm border border-indigo-500/20' : 'text-slate-400 hover:text-slate-200 hover:bg-white/5'}`}
           >
             العملاء
           </button>
           <button
             onClick={() => setActiveTab('supplier')}
-            className={`flex-1 py-2 text-sm font-medium rounded-lg transition-colors ${activeTab === 'supplier' ? 'bg-slate-700 text-slate-100 shadow-sm' : 'text-slate-400 hover:text-slate-200'}`}
+            className={`flex-1 py-2.5 text-sm font-bold rounded-xl transition-all ${activeTab === 'supplier' ? 'bg-indigo-500/20 text-indigo-300 shadow-sm border border-indigo-500/20' : 'text-slate-400 hover:text-slate-200 hover:bg-white/5'}`}
           >
             الموردين
           </button>
         </div>
 
-        <div className="relative">
-          <div className="absolute inset-y-0 right-0 pr-3 flex items-center pointer-events-none">
+        <div className="relative px-2 mb-2">
+          <div className="absolute inset-y-0 right-5 flex items-center pointer-events-none">
             <Search className="h-5 w-5 text-indigo-400" />
           </div>
           <input
@@ -115,13 +124,13 @@ export const Entities: React.FC = () => {
             placeholder={`ابحث عن ${activeTab === 'customer' ? 'عميل' : 'مورد'}...`}
             value={searchQuery}
             onChange={(e) => setSearchQuery(e.target.value)}
-            className="block w-full pl-3 pr-10 py-3 border border-slate-700 rounded-xl leading-5 bg-slate-800 text-slate-100 placeholder-slate-400 focus:outline-none focus:ring-2 focus:ring-indigo-500 focus:border-indigo-500 sm:text-sm transition-all"
+            className="block w-full pl-4 pr-12 py-3.5 border border-white/10 rounded-2xl leading-5 bg-black/20 text-slate-100 placeholder-slate-400 focus:outline-none focus:ring-2 focus:ring-indigo-500 focus:border-transparent sm:text-sm transition-all backdrop-blur-md shadow-inner"
           />
         </div>
       </div>
 
       {/* Entity List */}
-      <div className="flex-1 overflow-y-auto p-4 space-y-4">
+      <div className="flex-1 overflow-y-auto p-4 space-y-4 pb-28">
         {filteredEntities.length === 0 ? (
           <div className="flex flex-col items-center justify-center py-12 text-slate-500">
             <Users className="w-16 h-16 mb-4 text-slate-700" />
@@ -129,57 +138,47 @@ export const Entities: React.FC = () => {
           </div>
         ) : (
           filteredEntities.map(entity => (
-            <div key={entity.id} className="bg-slate-900 rounded-2xl p-4 shadow-sm border border-slate-800">
-              <div className="flex justify-between items-start mb-3">
+            <div key={entity.id} className="glass-card rounded-3xl p-5 relative overflow-hidden group hover:bg-white/5 transition-colors">
+              <div className="flex justify-between items-start mb-4">
                 <div>
-                  <Link to={`/entities/${entity.id}`} className="group flex items-center gap-2">
-                    <h3 className="font-bold text-slate-100 text-lg group-hover:text-indigo-400 transition-colors">{entity.name}</h3>
+                  <Link to={`/entities/${entity.id}`} className="group flex items-center gap-2 mb-1">
+                    <h3 className="font-bold text-white text-lg group-hover:text-indigo-400 transition-colors">{entity.name}</h3>
                     <ChevronLeft className="w-4 h-4 text-slate-500 group-hover:text-indigo-400 transition-colors" />
                   </Link>
-                  <div className="flex items-center text-xs text-slate-400 mt-1">
-                    <Phone className="w-3 h-3 ml-1" />
-                    <span dir="ltr">{entity.phone || 'لا يوجد رقم'}</span>
+                  <div className="flex items-center text-[10px] font-medium text-slate-400 uppercase tracking-wider">
+                    <Phone className="w-3 h-3 ml-1.5" />
+                    <span>{entity.phone || 'لا يوجد رقم'}</span>
                   </div>
                 </div>
                 <div className="flex gap-2">
-                  <button onClick={() => handleOpenModal(entity)} className="p-1.5 text-indigo-400 bg-indigo-950/50 rounded-lg hover:bg-indigo-900 transition-colors">
+                  <button onClick={() => handleOpenModal(entity)} className="p-2 text-indigo-400 bg-indigo-500/10 rounded-xl hover:bg-indigo-500/20 transition-colors border border-indigo-500/20">
                     <Edit2 className="w-4 h-4" />
                   </button>
-                  <button onClick={() => handleDelete(entity.id)} className="p-1.5 text-red-400 bg-red-950/50 rounded-lg hover:bg-red-900 transition-colors">
+                  <button onClick={() => setEntityToDelete(entity.id)} className="p-2 text-red-400 bg-red-500/10 rounded-xl hover:bg-red-500/20 transition-colors border border-red-500/20">
                     <Trash2 className="w-4 h-4" />
                   </button>
                 </div>
               </div>
               
               {entity.address && (
-                <div className="flex items-center text-xs text-slate-400 mb-3">
-                  <MapPin className="w-3 h-3 ml-1" />
+                <div className="flex items-center text-xs text-slate-300 mb-4 bg-black/20 p-2.5 rounded-xl border border-white/5">
+                  <MapPin className="w-4 h-4 ml-2 text-slate-400" />
                   <span>{entity.address}</span>
                 </div>
               )}
               
               {entity.phone && (
-                <div className="flex gap-2 mb-3">
-                  <a href={`tel:${entity.phone}`} className="flex-1 flex items-center justify-center gap-2 bg-slate-800 hover:bg-slate-700 text-slate-300 py-2 rounded-xl transition-colors border border-slate-700">
+                <div className="flex gap-3">
+                  <a href={`tel:${entity.phone}`} className="flex-1 flex items-center justify-center gap-2 bg-white/5 hover:bg-white/10 text-slate-200 py-3 rounded-2xl transition-colors border border-white/10">
                     <Phone className="w-4 h-4" />
-                    <span className="text-xs font-medium">اتصال</span>
+                    <span className="text-xs font-bold">اتصال</span>
                   </a>
-                  <a href={`https://wa.me/${entity.phone.replace(/\D/g, '')}`} target="_blank" rel="noopener noreferrer" className="flex-1 flex items-center justify-center gap-2 bg-emerald-950/30 hover:bg-emerald-900/50 text-emerald-400 py-2 rounded-xl transition-colors border border-emerald-900/50">
+                  <a href={`https://wa.me/${entity.phone.replace(/\D/g, '')}`} target="_blank" rel="noopener noreferrer" className="flex-1 flex items-center justify-center gap-2 bg-emerald-500/10 hover:bg-emerald-500/20 text-emerald-400 py-3 rounded-2xl transition-colors border border-emerald-500/20">
                     <MessageCircle className="w-4 h-4" />
-                    <span className="text-xs font-medium">واتساب</span>
+                    <span className="text-xs font-bold">واتساب</span>
                   </a>
                 </div>
               )}
-              
-              <div className="bg-slate-800/50 p-3 rounded-xl flex justify-between items-center mt-3 border border-slate-700/50">
-                <span className="text-sm text-slate-400">الرصيد</span>
-                <span className={`font-bold ${entity.balance > 0 ? 'text-emerald-400' : entity.balance < 0 ? 'text-red-400' : 'text-slate-100'}`} dir="ltr">
-                  {Math.round(Math.abs(entity.balance))} ج.م
-                  <span className="text-xs mr-1 text-slate-500 font-normal">
-                    {entity.balance > 0 ? '(لنا)' : entity.balance < 0 ? '(علينا)' : ''}
-                  </span>
-                </span>
-              </div>
             </div>
           ))
         )}
@@ -205,15 +204,10 @@ export const Entities: React.FC = () => {
                   <input required type="text" value={formData.name} onChange={e => setFormData({...formData, name: e.target.value})} className="w-full p-3 border border-slate-700 rounded-xl focus:ring-2 focus:ring-indigo-500 focus:border-indigo-500 outline-none transition-all bg-slate-800 text-slate-100" />
                 </div>
                 
-                <div className="grid grid-cols-2 gap-4">
+                <div className="grid grid-cols-1 gap-4">
                   <div>
                     <label className="block text-sm font-medium text-slate-300 mb-1">رقم الهاتف</label>
-                    <input type="tel" value={formData.phone} onChange={e => setFormData({...formData, phone: e.target.value})} className="w-full p-3 border border-slate-700 rounded-xl focus:ring-2 focus:ring-indigo-500 focus:border-indigo-500 outline-none transition-all text-left bg-slate-800 text-slate-100" dir="ltr" />
-                  </div>
-                  <div>
-                    <label className="block text-sm font-medium text-slate-300 mb-1">الرصيد الافتتاحي</label>
-                    <input type="number" step="1" value={formData.balance} onChange={e => setFormData({...formData, balance: e.target.value})} className="w-full p-3 border border-slate-700 rounded-xl focus:ring-2 focus:ring-indigo-500 focus:border-indigo-500 outline-none transition-all bg-slate-800 text-slate-100" />
-                    <p className="text-[10px] text-slate-500 mt-1">موجب = لنا، سالب = علينا</p>
+                    <input type="text" inputMode="decimal" value={formData.phone} onChange={e => setFormData({...formData, phone: parseNumberInput(e.target.value)})} className="w-full p-3 border border-slate-700 rounded-xl focus:ring-2 focus:ring-indigo-500 focus:border-indigo-500 outline-none transition-all text-right bg-slate-800 text-slate-100" />
                   </div>
                 </div>
 
@@ -232,6 +226,15 @@ export const Entities: React.FC = () => {
           </div>
         </div>
       )}
+
+      <ConfirmModal
+        isOpen={!!entityToDelete}
+        title="حذف الجهة"
+        message="هل أنت متأكد من رغبتك في حذف هذه الجهة؟ سيؤدي ذلك إلى إزالتها من النظام نهائياً."
+        confirmText="حذف"
+        onConfirm={handleDelete}
+        onCancel={() => setEntityToDelete(null)}
+      />
     </div>
   );
 };

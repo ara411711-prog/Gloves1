@@ -16,6 +16,7 @@ type InventoryContextType = {
   addEntity: (entity: Omit<Entity, 'id' | 'createdAt' | 'updatedAt'>) => Promise<void>;
   updateEntity: (id: string, entity: Partial<Entity>) => Promise<void>;
   deleteEntity: (id: string) => Promise<void>;
+  clearTransactions: () => Promise<void>;
 };
 
 const InventoryContext = createContext<InventoryContextType | undefined>(undefined);
@@ -150,17 +151,6 @@ export const InventoryProvider: React.FC<{ children: React.ReactNode }> = ({ chi
         await updateProduct(product.id, { stock: product.stock + stockChange });
       }
 
-      // Update entity balance if applicable
-      if (transactionData.entityId) {
-        const entity = entities.find(e => e.id === transactionData.entityId);
-        if (entity) {
-          // If we sell to customer (type 'out'), they owe us money (balance increases)
-          // If we buy from supplier (type 'in'), we owe them money (balance decreases)
-          const balanceChange = transactionData.type === 'out' ? transactionData.total : -transactionData.total;
-          await updateEntity(entity.id, { balance: entity.balance + balanceChange });
-        }
-      }
-
     } catch (err) {
       console.error(err);
       throw new Error("فشل في تسجيل العملية");
@@ -206,6 +196,16 @@ export const InventoryProvider: React.FC<{ children: React.ReactNode }> = ({ chi
     }
   };
 
+  const clearTransactions = async () => {
+    try {
+      const transactionsRef = ref(db, 'transactions');
+      await remove(transactionsRef);
+    } catch (err) {
+      console.error(err);
+      throw new Error("فشل في مسح العمليات");
+    }
+  };
+
   return (
     <InventoryContext.Provider
       value={{
@@ -221,6 +221,7 @@ export const InventoryProvider: React.FC<{ children: React.ReactNode }> = ({ chi
         addEntity,
         updateEntity,
         deleteEntity,
+        clearTransactions,
       }}
     >
       {children}

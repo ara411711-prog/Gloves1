@@ -1,12 +1,19 @@
 import React, { useState } from 'react';
 import { useInventory } from '../context/InventoryContext';
-import { Plus, ArrowUpRight, ArrowDownRight, Search, X, ArrowRightLeft } from 'lucide-react';
+import { Plus, ArrowUpRight, ArrowDownRight, Search, X, ArrowRightLeft, Trash2, ChevronDown } from 'lucide-react';
 import { format } from 'date-fns';
 import { ar } from 'date-fns/locale';
+import { ConfirmModal } from '../components/ConfirmModal';
+import { SelectModal, SelectOption } from '../components/SelectModal';
+import { parseNumberInput } from '../utils/numbers';
+import { useAndroidBack } from '../hooks/useAndroidBack';
 
 export const Transactions: React.FC = () => {
-  const { transactions, products, entities, addTransaction } = useInventory();
+  const { transactions, products, entities, addTransaction, clearTransactions } = useInventory();
   const [isModalOpen, setIsModalOpen] = useState(false);
+  const [isClearModalOpen, setIsClearModalOpen] = useState(false);
+  const [isProductSelectOpen, setIsProductSelectOpen] = useState(false);
+  const [isEntitySelectOpen, setIsEntitySelectOpen] = useState(false);
   const [searchQuery, setSearchQuery] = useState('');
   const [transactionType, setTransactionType] = useState<'in' | 'out'>('out');
 
@@ -76,46 +83,79 @@ export const Transactions: React.FC = () => {
     setIsModalOpen(false);
   };
 
+  const handleClearTransactions = async () => {
+    await clearTransactions();
+  };
+
+  const productOptions: SelectOption[] = products.map(p => ({
+    id: p.id,
+    label: `${p.name} ${p.size ? `(${p.size})` : ''}`,
+    subLabel: `المتاح: ${p.stock} | السعر: ${transactionType === 'out' ? p.price : p.cost} ج.م`,
+    badge: p.stock <= p.minStock ? 'مخزون منخفض' : undefined,
+    badgeColor: p.stock <= p.minStock ? 'red' : 'emerald'
+  }));
+
+  const entityOptions: SelectOption[] = [
+    { id: '', label: 'بدون تحديد' },
+    ...entities
+      .filter(e => e.type === (transactionType === 'out' ? 'customer' : 'supplier'))
+      .map(e => ({
+        id: e.id,
+        label: e.name,
+        subLabel: e.phone || undefined,
+      }))
+  ];
+
+  useAndroidBack(() => {
+    setIsModalOpen(false);
+    return true;
+  }, isModalOpen);
+
   return (
-    <div className="flex flex-col h-full bg-slate-950">
+    <div className="flex flex-col h-full bg-slate-950 relative">
+      {/* Background Glow */}
+      <div className="absolute top-0 left-1/2 -translate-x-1/2 w-full max-w-lg h-64 bg-emerald-500/10 blur-[100px] rounded-full pointer-events-none"></div>
+
       {/* Header */}
-      <div className="bg-slate-900 text-slate-100 p-4 pt-6 rounded-b-3xl shadow-md z-10 shrink-0 border-b border-slate-800">
-        <div className="flex justify-between items-center mb-6">
-          <h1 className="text-2xl font-bold">العمليات</h1>
+      <div className="glass-panel text-slate-100 p-4 pt-6 rounded-b-[2.5rem] z-10 shrink-0 border-t-0 border-x-0 relative">
+        <div className="flex justify-between items-center mb-6 px-2">
+          <h1 className="text-3xl font-black tracking-tight text-white">العمليات</h1>
           <div className="flex gap-2">
+            {transactions.length > 0 && (
+              <button 
+                onClick={() => setIsClearModalOpen(true)}
+                className="bg-red-500/10 hover:bg-red-500/20 text-red-400 p-3 rounded-2xl transition-colors shadow-sm flex items-center justify-center border border-red-500/20 active:scale-95"
+                title="تنظيف العمليات"
+              >
+                <Trash2 className="w-5 h-5" />
+              </button>
+            )}
             <button 
               onClick={() => handleOpenModal('out')}
-              className="bg-orange-600 hover:bg-orange-500 text-white p-2 rounded-xl transition-colors shadow-sm flex items-center gap-1"
+              className="bg-gradient-to-r from-orange-500 to-orange-600 hover:from-orange-400 hover:to-orange-500 text-white px-5 py-3 rounded-2xl transition-all shadow-lg shadow-orange-500/20 flex items-center gap-2 active:scale-95 border border-orange-400/30"
             >
               <ArrowDownRight className="w-5 h-5" />
-              <span className="text-sm font-bold">بيع</span>
-            </button>
-            <button 
-              onClick={() => handleOpenModal('in')}
-              className="bg-emerald-600 hover:bg-emerald-500 text-white p-2 rounded-xl transition-colors shadow-sm flex items-center gap-1"
-            >
-              <ArrowUpRight className="w-5 h-5" />
-              <span className="text-sm font-bold">شراء</span>
+              <span className="text-sm font-bold">تسجيل بيع</span>
             </button>
           </div>
         </div>
         
-        <div className="relative">
-          <div className="absolute inset-y-0 right-0 pr-3 flex items-center pointer-events-none">
-            <Search className="h-5 w-5 text-indigo-400" />
+        <div className="relative px-2 mb-2">
+          <div className="absolute inset-y-0 right-5 flex items-center pointer-events-none">
+            <Search className="h-5 w-5 text-emerald-400" />
           </div>
           <input
             type="text"
             placeholder="ابحث في العمليات..."
             value={searchQuery}
             onChange={(e) => setSearchQuery(e.target.value)}
-            className="block w-full pl-3 pr-10 py-3 border border-slate-700 rounded-xl leading-5 bg-slate-800 text-slate-100 placeholder-slate-400 focus:outline-none focus:ring-2 focus:ring-indigo-500 focus:border-indigo-500 sm:text-sm transition-all"
+            className="block w-full pl-4 pr-12 py-3.5 border border-white/10 rounded-2xl leading-5 bg-black/20 text-slate-100 placeholder-slate-400 focus:outline-none focus:ring-2 focus:ring-emerald-500 focus:border-transparent sm:text-sm transition-all backdrop-blur-md shadow-inner"
           />
         </div>
       </div>
 
       {/* Transactions List */}
-      <div className="flex-1 overflow-y-auto p-4 space-y-3">
+      <div className="flex-1 overflow-y-auto p-4 space-y-3 pb-28">
         {filteredTransactions.length === 0 ? (
           <div className="flex flex-col items-center justify-center py-12 text-slate-500">
             <ArrowRightLeft className="w-16 h-16 mb-4 text-slate-700" />
@@ -128,37 +168,37 @@ export const Transactions: React.FC = () => {
             const isOut = transaction.type === 'out';
             
             return (
-              <div key={transaction.id} className="bg-slate-900 rounded-2xl p-4 shadow-sm border border-slate-800">
-                <div className="flex justify-between items-start mb-2">
-                  <div className="flex items-center gap-3">
-                    <div className={`p-2 rounded-xl ${isOut ? 'bg-orange-950/50 text-orange-400' : 'bg-emerald-950/50 text-emerald-400'}`}>
+              <div key={transaction.id} className="glass-card rounded-3xl p-4 relative overflow-hidden group hover:bg-white/5 transition-colors">
+                <div className="flex justify-between items-start mb-3">
+                  <div className="flex items-center gap-4">
+                    <div className={`p-3 rounded-2xl border ${isOut ? 'bg-orange-500/10 text-orange-400 border-orange-500/20' : 'bg-emerald-500/10 text-emerald-400 border-emerald-500/20'}`}>
                       {isOut ? <ArrowDownRight className="w-5 h-5" /> : <ArrowUpRight className="w-5 h-5" />}
                     </div>
                     <div>
-                      <h3 className="font-bold text-slate-100">{product?.name || 'منتج محذوف'}</h3>
-                      <p className="text-xs text-slate-400">
+                      <h3 className="font-bold text-white text-base">{product?.name || 'منتج محذوف'}</h3>
+                      <p className="text-[10px] font-medium text-slate-400 mt-0.5 uppercase tracking-wider">
                         {format(new Date(transaction.date), 'dd MMM yyyy - hh:mm a', { locale: ar })}
                       </p>
                     </div>
                   </div>
-                  <div className="text-left">
-                    <p className={`font-bold ${isOut ? 'text-orange-400' : 'text-emerald-400'}`} dir="ltr">
-                      {isOut ? '-' : '+'}{transaction.quantity}
+                  <div className="text-right">
+                    <p className={`font-black text-lg ${isOut ? 'text-orange-400' : 'text-emerald-400'}`}>
+                      {transaction.quantity} {isOut ? '-' : '+'}
                     </p>
-                    <p className="text-xs font-bold text-slate-100">{Math.round(transaction.total)} ج.م</p>
+                    <p className="text-[10px] font-medium text-slate-400">{Math.round(transaction.total).toLocaleString()} ج.م</p>
                   </div>
                 </div>
                 
                 {(entity || transaction.notes) && (
-                  <div className="mt-3 pt-3 border-t border-slate-800 text-sm">
+                  <div className="mt-3 pt-3 border-t border-white/5 text-sm bg-black/10 -mx-4 -mb-4 px-4 pb-4">
                     {entity && (
-                      <p className="text-slate-300">
-                        <span className="text-slate-500 mr-1">{isOut ? 'العميل:' : 'المورد:'}</span>
-                        {entity.name}
+                      <p className="text-slate-300 flex items-center gap-2 mb-1">
+                        <span className="text-[10px] font-bold text-slate-500 uppercase tracking-wider bg-white/5 px-2 py-0.5 rounded-md">{isOut ? 'العميل' : 'المورد'}</span>
+                        <span className="font-medium">{entity.name}</span>
                       </p>
                     )}
                     {transaction.notes && (
-                      <p className="text-slate-400 text-xs mt-1">{transaction.notes}</p>
+                      <p className="text-slate-400 text-xs mt-2 italic border-r-2 border-slate-700 pr-2">{transaction.notes}</p>
                     )}
                   </div>
                 )}
@@ -185,17 +225,18 @@ export const Transactions: React.FC = () => {
               <form id="transaction-form" onSubmit={handleSubmit} className="space-y-4">
                 <div>
                   <label className="block text-sm font-medium text-slate-300 mb-1">المنتج *</label>
-                  <select 
-                    required 
-                    value={formData.productId} 
-                    onChange={e => handleProductChange(e.target.value)} 
-                    className="w-full p-3 border border-slate-700 rounded-xl focus:ring-2 focus:ring-indigo-500 focus:border-indigo-500 outline-none transition-all bg-slate-800 text-slate-100"
+                  <button
+                    type="button"
+                    onClick={() => setIsProductSelectOpen(true)}
+                    className="w-full p-3 border border-slate-700 rounded-xl focus:ring-2 focus:ring-sky-500 focus:border-indigo-500 outline-none transition-all bg-slate-800 text-slate-100 flex justify-between items-center"
                   >
-                    <option value="">اختر المنتج...</option>
-                    {products.map(p => (
-                      <option key={p.id} value={p.id}>{p.name} {p.size ? `(${p.size})` : ''} (المتاح: {p.stock})</option>
-                    ))}
-                  </select>
+                    <span className={formData.productId ? 'text-slate-100' : 'text-slate-400'}>
+                      {formData.productId 
+                        ? productOptions.find(o => o.id === formData.productId)?.label || 'منتج غير معروف'
+                        : 'اختر المنتج...'}
+                    </span>
+                    <ChevronDown className="w-5 h-5 text-slate-400" />
+                  </button>
                 </div>
                 
                 <div className="grid grid-cols-2 gap-4">
@@ -203,24 +244,30 @@ export const Transactions: React.FC = () => {
                     <label className="block text-sm font-medium text-slate-300 mb-1">الكمية *</label>
                     <input 
                       required 
-                      type="number" 
-                      min="1" 
-                      max={transactionType === 'out' ? products.find(p => p.id === formData.productId)?.stock : undefined}
+                      type="text" 
+                      inputMode="decimal"
                       value={formData.quantity} 
-                      onChange={e => setFormData({...formData, quantity: e.target.value})} 
-                      className="w-full p-3 border border-slate-700 rounded-xl focus:ring-2 focus:ring-indigo-500 focus:border-indigo-500 outline-none transition-all bg-slate-800 text-slate-100" 
+                      onChange={e => {
+                        const val = parseNumberInput(e.target.value);
+                        const max = transactionType === 'out' ? products.find(p => p.id === formData.productId)?.stock : undefined;
+                        if (max !== undefined && parseInt(val) > max) {
+                          setFormData({...formData, quantity: max.toString()});
+                        } else {
+                          setFormData({...formData, quantity: val});
+                        }
+                      }} 
+                      className="w-full p-3 border border-slate-700 rounded-xl focus:ring-2 focus:ring-indigo-500 focus:border-indigo-500 outline-none transition-all bg-slate-800 text-slate-100 text-right" 
                     />
                   </div>
                   <div>
                     <label className="block text-sm font-medium text-slate-300 mb-1">السعر للوحدة *</label>
                     <input 
                       required 
-                      type="number" 
-                      min="0" 
-                      step="1" 
+                      type="text" 
+                      inputMode="decimal"
                       value={formData.price} 
-                      onChange={e => setFormData({...formData, price: e.target.value})} 
-                      className="w-full p-3 border border-slate-700 rounded-xl focus:ring-2 focus:ring-indigo-500 focus:border-indigo-500 outline-none transition-all bg-slate-800 text-slate-100" 
+                      onChange={e => setFormData({...formData, price: parseNumberInput(e.target.value)})} 
+                      className="w-full p-3 border border-slate-700 rounded-xl focus:ring-2 focus:ring-indigo-500 focus:border-indigo-500 outline-none transition-all bg-slate-800 text-slate-100 text-right" 
                     />
                   </div>
                 </div>
@@ -236,19 +283,18 @@ export const Transactions: React.FC = () => {
                   <label className="block text-sm font-medium text-slate-300 mb-1">
                     {transactionType === 'out' ? 'العميل (اختياري)' : 'المورد (اختياري)'}
                   </label>
-                  <select 
-                    value={formData.entityId} 
-                    onChange={e => setFormData({...formData, entityId: e.target.value})} 
-                    className="w-full p-3 border border-slate-700 rounded-xl focus:ring-2 focus:ring-indigo-500 focus:border-indigo-500 outline-none transition-all bg-slate-800 text-slate-100"
+                  <button
+                    type="button"
+                    onClick={() => setIsEntitySelectOpen(true)}
+                    className="w-full p-3 border border-slate-700 rounded-xl focus:ring-2 focus:ring-indigo-500 focus:border-indigo-500 outline-none transition-all bg-slate-800 text-slate-100 flex justify-between items-center"
                   >
-                    <option value="">بدون تحديد</option>
-                    {entities
-                      .filter(e => e.type === (transactionType === 'out' ? 'customer' : 'supplier'))
-                      .map(e => (
-                        <option key={e.id} value={e.id}>{e.name}</option>
-                      ))
-                    }
-                  </select>
+                    <span className={formData.entityId ? 'text-slate-100' : 'text-slate-400'}>
+                      {formData.entityId 
+                        ? entityOptions.find(o => o.id === formData.entityId)?.label || 'جهة غير معروفة'
+                        : 'بدون تحديد'}
+                    </span>
+                    <ChevronDown className="w-5 h-5 text-slate-400" />
+                  </button>
                 </div>
 
                 <div>
@@ -277,6 +323,35 @@ export const Transactions: React.FC = () => {
           </div>
         </div>
       )}
+
+      <ConfirmModal
+        isOpen={isClearModalOpen}
+        title="تنظيف سجل العمليات"
+        message="هل أنت متأكد من رغبتك في مسح جميع العمليات المسجلة؟ لا يمكن التراجع عن هذا الإجراء."
+        confirmText="مسح الكل"
+        onConfirm={handleClearTransactions}
+        onCancel={() => setIsClearModalOpen(false)}
+      />
+
+      <SelectModal
+        isOpen={isProductSelectOpen}
+        title="اختر المنتج"
+        options={productOptions}
+        value={formData.productId}
+        onChange={handleProductChange}
+        onClose={() => setIsProductSelectOpen(false)}
+        searchPlaceholder="ابحث عن منتج..."
+      />
+
+      <SelectModal
+        isOpen={isEntitySelectOpen}
+        title={transactionType === 'out' ? 'اختر العميل' : 'اختر المورد'}
+        options={entityOptions}
+        value={formData.entityId}
+        onChange={(val) => setFormData({ ...formData, entityId: val })}
+        onClose={() => setIsEntitySelectOpen(false)}
+        searchPlaceholder={transactionType === 'out' ? 'ابحث عن عميل...' : 'ابحث عن مورد...'}
+      />
     </div>
   );
 };

@@ -1,43 +1,20 @@
 import React, { useState } from 'react';
 import { useInventory } from '../context/InventoryContext';
-import { FileSpreadsheet, FileText, ArrowDownRight, ArrowUpRight } from 'lucide-react';
+import { FileSpreadsheet, FileText, ArrowDownRight, ArrowUpRight, Trash2 } from 'lucide-react';
 import { format } from 'date-fns';
 import { ar } from 'date-fns/locale';
 import * as XLSX from 'xlsx';
 import jsPDF from 'jspdf';
 import { toPng } from 'html-to-image';
+import { ConfirmModal } from '../components/ConfirmModal';
+import { handleShare } from '../utils/androidBridge';
 
 export const Reports: React.FC = () => {
-  const { transactions, products, entities } = useInventory();
+  const { transactions, products, entities, clearTransactions } = useInventory();
   const [isExporting, setIsExporting] = useState(false);
+  const [isClearModalOpen, setIsClearModalOpen] = useState(false);
 
   const sortedTransactions = [...transactions].sort((a, b) => new Date(b.date).getTime() - new Date(a.date).getTime());
-
-  const downloadFile = (file: File) => {
-    const url = URL.createObjectURL(file);
-    const a = document.createElement('a');
-    a.href = url;
-    a.download = file.name;
-    a.click();
-    URL.revokeObjectURL(url);
-  };
-
-  const shareFile = async (file: File) => {
-    if (navigator.canShare && navigator.canShare({ files: [file] })) {
-      try {
-        await navigator.share({
-          files: [file],
-          title: 'تقرير العمليات الشامل',
-          text: 'تقرير بجميع العمليات',
-        });
-      } catch (error) {
-        console.error('Error sharing', error);
-        downloadFile(file);
-      }
-    } else {
-      downloadFile(file);
-    }
-  };
 
   const exportExcel = () => {
     const wb = XLSX.utils.book_new();
@@ -84,7 +61,7 @@ export const Reports: React.FC = () => {
     XLSX.utils.book_append_sheet(wb, ws, "العمليات");
     const excelBuffer = XLSX.write(wb, { bookType: 'xlsx', type: 'array' });
     const file = new File([excelBuffer], `تقرير_العمليات_الشامل.xlsx`, { type: 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet' });
-    shareFile(file);
+    handleShare(file, 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet');
   };
 
   const CHUNK_SIZE = 20;
@@ -122,7 +99,7 @@ export const Reports: React.FC = () => {
 
       const pdfBlob = pdf.output('blob');
       const file = new File([pdfBlob], `تقرير_العمليات_الشامل.pdf`, { type: 'application/pdf' });
-      shareFile(file);
+      handleShare(file, 'application/pdf');
     } catch (error) {
       console.error('Error generating PDF', error);
     } finally {
@@ -131,14 +108,26 @@ export const Reports: React.FC = () => {
   };
 
   return (
-    <div className="flex flex-col h-full bg-slate-950">
-      <div className="bg-slate-900 text-slate-100 p-4 pt-6 rounded-b-3xl shadow-md z-10 shrink-0 border-b border-slate-800">
-        <div className="flex justify-between items-center mb-2">
-          <h1 className="text-2xl font-bold">التقارير الشاملة</h1>
+    <div className="flex flex-col h-full bg-slate-950 relative">
+      {/* Background Glow */}
+      <div className="absolute top-0 left-1/2 -translate-x-1/2 w-full max-w-lg h-64 bg-sky-500/10 blur-[100px] rounded-full pointer-events-none"></div>
+
+      <div className="glass-panel text-slate-100 p-4 pt-6 rounded-b-[2.5rem] z-10 shrink-0 border-t-0 border-x-0 relative">
+        <div className="flex justify-between items-center mb-2 px-2">
+          <h1 className="text-3xl font-black tracking-tight text-white">التقارير</h1>
           <div className="flex gap-2">
+            {transactions.length > 0 && (
+              <button 
+                onClick={() => setIsClearModalOpen(true)}
+                className="bg-red-500/10 hover:bg-red-500/20 text-red-400 p-3 rounded-2xl transition-colors shadow-sm flex items-center justify-center border border-red-500/20 active:scale-95"
+                title="تنظيف التقارير (مسح العمليات)"
+              >
+                <Trash2 className="w-5 h-5" />
+              </button>
+            )}
             <button 
               onClick={exportExcel}
-              className="flex items-center gap-1 bg-emerald-950/50 hover:bg-emerald-900 text-emerald-400 p-2 rounded-xl transition-colors text-xs font-medium border border-emerald-900/50"
+              className="flex items-center gap-2 bg-emerald-500/10 hover:bg-emerald-500/20 text-emerald-400 px-4 py-2.5 rounded-2xl transition-colors text-sm font-bold border border-emerald-500/20 active:scale-95"
             >
               <FileSpreadsheet className="w-4 h-4" />
               <span>إكسل</span>
@@ -146,70 +135,69 @@ export const Reports: React.FC = () => {
             <button 
               onClick={exportPDF}
               disabled={isExporting}
-              className="flex items-center gap-1 bg-red-950/50 hover:bg-red-900 text-red-400 p-2 rounded-xl transition-colors text-xs font-medium border border-red-900/50 disabled:opacity-50"
+              className="flex items-center gap-2 bg-red-500/10 hover:bg-red-500/20 text-red-400 px-4 py-2.5 rounded-2xl transition-colors text-sm font-bold border border-red-500/20 disabled:opacity-50 active:scale-95"
             >
               <FileText className="w-4 h-4" />
               <span>{isExporting ? 'جاري...' : 'PDF'}</span>
             </button>
           </div>
         </div>
-        <p className="text-slate-400 text-sm">سجل بجميع العمليات التي تمت في النظام</p>
+        <p className="text-sky-400 text-xs font-medium px-2 uppercase tracking-wider">سجل بجميع العمليات التي تمت في النظام</p>
       </div>
 
-      <div className="flex-1 overflow-y-auto p-4">
+      <div className="flex-1 overflow-y-auto p-4 pb-28">
         {sortedTransactions.length === 0 ? (
           <div className="flex flex-col items-center justify-center py-12 text-slate-500">
             <p>لا توجد عمليات مسجلة حتى الآن</p>
           </div>
         ) : (
-          <div className="bg-slate-900 rounded-2xl border border-slate-800 overflow-hidden p-2">
+          <div className="glass-card rounded-3xl overflow-hidden">
             <div className="overflow-x-auto">
-              <table className="w-full text-right text-sm">
-                <thead className="bg-slate-800 text-slate-300">
+              <table className="w-full text-right text-xs sm:text-sm">
+                <thead className="bg-black/20 text-slate-300 border-b border-white/5">
                   <tr>
-                    <th className="px-4 py-3 font-medium">التاريخ</th>
-                    <th className="px-4 py-3 font-medium">العملية</th>
-                    <th className="px-4 py-3 font-medium">المنتج</th>
-                    <th className="px-4 py-3 font-medium">الجهة</th>
-                    <th className="px-4 py-3 font-medium">الكمية</th>
-                    <th className="px-4 py-3 font-medium">السعر</th>
-                    <th className="px-4 py-3 font-medium">الإجمالي</th>
+                    <th className="px-4 py-4 font-bold whitespace-nowrap uppercase tracking-wider text-[10px]">التاريخ</th>
+                    <th className="px-4 py-4 font-bold whitespace-nowrap uppercase tracking-wider text-[10px]">العملية</th>
+                    <th className="px-4 py-4 font-bold whitespace-nowrap uppercase tracking-wider text-[10px]">المنتج</th>
+                    <th className="px-4 py-4 font-bold whitespace-nowrap uppercase tracking-wider text-[10px]">الجهة</th>
+                    <th className="px-4 py-4 font-bold whitespace-nowrap uppercase tracking-wider text-[10px]">الكمية</th>
+                    <th className="px-4 py-4 font-bold whitespace-nowrap uppercase tracking-wider text-[10px]">السعر</th>
+                    <th className="px-4 py-4 font-bold whitespace-nowrap uppercase tracking-wider text-[10px] text-indigo-400">الإجمالي</th>
                   </tr>
                 </thead>
-                <tbody className="divide-y divide-slate-800">
+                <tbody className="divide-y divide-white/5">
                   {sortedTransactions.map(transaction => {
                     const product = products.find(p => p.id === transaction.productId);
                     const entity = entities.find(e => e.id === transaction.entityId);
                     const isOut = transaction.type === 'out';
                     
                     return (
-                      <tr key={transaction.id} className="text-slate-300 hover:bg-slate-800/50 transition-colors">
-                        <td className="px-4 py-3 whitespace-nowrap text-xs">
-                          {format(new Date(transaction.date), 'yyyy/MM/dd', { locale: ar })}
-                          <br/>
-                          <span className="text-slate-500">{format(new Date(transaction.date), 'hh:mm a', { locale: ar })}</span>
+                      <tr key={transaction.id} className="text-slate-300 hover:bg-white/5 transition-colors">
+                        <td className="px-4 py-3 whitespace-nowrap">
+                          <div className="font-bold text-slate-200">{format(new Date(transaction.date), 'yyyy/MM/dd', { locale: ar })}</div>
+                          <div className="text-[10px] font-medium text-slate-500 mt-0.5">{format(new Date(transaction.date), 'hh:mm a', { locale: ar })}</div>
                         </td>
-                        <td className="px-4 py-3">
-                          <div className={`inline-flex items-center gap-1 px-2 py-1 rounded-lg text-xs font-medium ${isOut ? 'bg-orange-950/50 text-orange-400' : 'bg-emerald-950/50 text-emerald-400'}`}>
+                        <td className="px-4 py-3 whitespace-nowrap">
+                          <div className={`inline-flex items-center gap-1 px-2.5 py-1 rounded-md text-[10px] font-bold border ${isOut ? 'bg-orange-500/10 text-orange-400 border-orange-500/20' : 'bg-emerald-500/10 text-emerald-400 border-emerald-500/20'}`}>
                             {isOut ? <ArrowDownRight className="w-3 h-3" /> : <ArrowUpRight className="w-3 h-3" />}
                             {isOut ? 'بيع' : 'شراء'}
                           </div>
                         </td>
-                        <td className="px-4 py-3 whitespace-nowrap">
+                        <td className="px-4 py-3 whitespace-nowrap font-bold text-white">
                           {product?.name || 'منتج محذوف'}
-                          {product?.size && <span className="text-slate-500 text-xs mr-1">({product.size})</span>}
+                          {product?.size && <span className="text-indigo-400 text-[10px] bg-indigo-500/10 px-1.5 py-0.5 rounded-md mr-2 border border-indigo-500/20">{product.size}</span>}
                         </td>
-                        <td className="px-4 py-3 whitespace-nowrap">
+                        <td className="px-4 py-3 whitespace-nowrap text-slate-400 font-medium">
                           {entity?.name || '-'}
                         </td>
-                        <td className="px-4 py-3 font-medium" dir="ltr">
+                        <td className="px-4 py-3 font-black text-slate-200">
                           {transaction.quantity}
                         </td>
-                        <td className="px-4 py-3" dir="ltr">
-                          {Math.round(transaction.price)}
+                        <td className="px-4 py-3 font-bold text-slate-300">
+                          {Math.round(transaction.price).toLocaleString()}
                         </td>
-                        <td className="px-4 py-3 font-bold text-slate-100" dir="ltr">
-                          {Math.round(transaction.total)}
+                        <td className="px-4 py-3 font-black text-indigo-400 bg-indigo-500/5">
+                          {Math.round(transaction.total).toLocaleString()}
                         </td>
                       </tr>
                     );
@@ -234,7 +222,9 @@ export const Reports: React.FC = () => {
               backgroundColor: '#ffffff', 
               color: '#000000', 
               direction: 'rtl',
-              fontFamily: 'sans-serif'
+              fontFamily: 'sans-serif',
+              display: 'flex',
+              flexDirection: 'column'
             }}
           >
             <div style={{ display: 'flex', justifyContent: 'space-between', borderBottom: '2px solid #e2e8f0', paddingBottom: '16px', marginBottom: '24px' }}>
@@ -303,9 +293,24 @@ export const Reports: React.FC = () => {
                 </div>
               </div>
             )}
+            
+            <div style={{ marginTop: 'auto', paddingTop: '32px', textAlign: 'center' }}>
+              <p style={{ fontSize: '10px', color: '#94a3b8', margin: 0 }}>تم إنشاء هذا التقرير بواسطة تطبيق نظام إدارة المخزون</p>
+            </div>
           </div>
         ))}
       </div>
+
+      <ConfirmModal
+        isOpen={isClearModalOpen}
+        title="تنظيف التقارير"
+        message="هل أنت متأكد من رغبتك في مسح جميع التقارير والعمليات المسجلة؟ لا يمكن التراجع عن هذا الإجراء."
+        confirmText="مسح الكل"
+        onConfirm={async () => {
+          await clearTransactions();
+        }}
+        onCancel={() => setIsClearModalOpen(false)}
+      />
     </div>
   );
 };

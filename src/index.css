@@ -2,11 +2,21 @@
 
 @theme {
   --font-sans: "Inter", system-ui, sans-serif;
+  --font-mono: "JetBrains Mono", ui-monospace, SFMono-Regular, monospace;
 }
 
 @layer utilities {
   .pb-safe {
     padding-bottom: env(safe-area-inset-bottom);
+  }
+  .glass-panel {
+    @apply bg-slate-900/70 backdrop-blur-xl border border-white/5 shadow-2xl;
+  }
+  .glass-card {
+    @apply bg-slate-800/40 backdrop-blur-md border border-white/5 shadow-lg;
+  }
+  .text-gradient {
+    @apply bg-clip-text text-transparent bg-gradient-to-r from-sky-400 to-emerald-400;
   }
 }
 
@@ -16,9 +26,28 @@ html, body, #root {
   margin: 0;
   padding: 0;
   overflow: hidden;
+  overscroll-behavior-y: none;
 }
 
 body {
-  background-color: #0f172a; /* slate-900 */
+  background-color: #020617; /* slate-950 */
   color: #f8fafc;
+  -webkit-tap-highlight-color: transparent;
+  user-select: none;
+  -webkit-user-select: none;
+  touch-action: manipulation;
+}
+
+input, textarea {
+  user-select: auto;
+  -webkit-user-select: auto;
+}
+
+/* Hide scrollbar for a native app feel */
+::-webkit-scrollbar {
+  display: none;
+}
+* {
+  -ms-overflow-style: none;
+  scrollbar-width: none;
 }
