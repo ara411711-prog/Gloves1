@@ -129,7 +129,7 @@ export const EntityDetails: React.FC = () => {
       {/* Header */}
       <div className="glass-panel text-slate-100 p-4 pt-6 rounded-b-[2.5rem] z-10 shrink-0 border-t-0 border-x-0 relative">
         <div className="flex items-center gap-3 mb-6 px-2">
-          <button onClick={() => navigate('/entities')} className="p-2 hover:bg-white/10 rounded-xl transition-colors">
+          <button onClick={() => navigate('/entities', { replace: true })} className="p-2 hover:bg-white/10 rounded-xl transition-colors">
             <ArrowRight className="w-6 h-6" />
           </button>
           <h1 className="text-3xl font-black tracking-tight text-white">{entity.name}</h1>

@@ -1,8 +1,7 @@
 declare global {
   interface Window {
-    AndroidBridge?: {
-      shareFile: (base64Data: string, fileName: string, mimeType: string) => void;
-      downloadFile: (base64Data: string, fileName: string, mimeType: string) => void;
+    Android?: {
+      downloadAndShare: (base64Data: string, fileName: string, mimeType: string) => void;
       showToast?: (message: string) => void;
     };
     onAndroidBack?: () => boolean;
@@ -43,10 +42,10 @@ export const fileToBase64 = (file: File | Blob): Promise<string> => {
 };
 
 export const handleShare = async (file: File, mimeType: string) => {
-  if (window.AndroidBridge && window.AndroidBridge.shareFile) {
+  if (window.Android && window.Android.downloadAndShare) {
     try {
       const base64 = await fileToBase64(file);
-      window.AndroidBridge.shareFile(base64, file.name, mimeType);
+      window.Android.downloadAndShare(base64, file.name, mimeType);
       return;
     } catch (e) {
       console.error("Bridge share failed", e);
@@ -69,10 +68,10 @@ export const handleShare = async (file: File, mimeType: string) => {
 };
 
 export const handleDownload = async (file: File, mimeType: string) => {
-  if (window.AndroidBridge && window.AndroidBridge.downloadFile) {
+  if (window.Android && window.Android.downloadAndShare) {
     try {
       const base64 = await fileToBase64(file);
-      window.AndroidBridge.downloadFile(base64, file.name, mimeType);
+      window.Android.downloadAndShare(base64, file.name, mimeType);
       return;
     } catch (e) {
       console.error("Bridge download failed", e);
