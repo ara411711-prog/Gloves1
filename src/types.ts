@@ -8,6 +8,7 @@ export type Product = {
   minStock: number;
   category?: string;
   size?: 'S' | 'M' | 'L' | 'XL' | '';
+  supplierId?: string;
   createdAt: number;
   updatedAt: number;
 };

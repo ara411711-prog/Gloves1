@@ -17,7 +17,7 @@ export const Layout: React.FC = () => {
     }
     
     // إذا كان في أحد التبويبات الرئيسية، ارجع للرئيسية
-    if (['/products', '/transactions', '/entities', '/reports'].includes(path)) {
+    if (['/products', '/entities', '/reports'].includes(path)) {
       navigate('/');
       return true;
     }
@@ -32,13 +32,11 @@ export const Layout: React.FC = () => {
     navigate(-1);
     return true;
   }, true);
-
   const navItems = [
     { to: '/', icon: Home, label: 'الرئيسية' },
     { to: '/products', icon: Package, label: 'المنتجات' },
-    { to: '/transactions', icon: ArrowRightLeft, label: 'العمليات' },
+    { to: '/reports', icon: ArrowRightLeft, label: 'العمليات' },
     { to: '/entities', icon: Users, label: 'الجهات' },
-    { to: '/reports', icon: FileText, label: 'التقارير' },
   ];
 
   return (

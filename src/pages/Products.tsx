@@ -4,16 +4,19 @@ import { Plus, Edit2, Trash2, Package, Search, X, Copy, ChevronDown } from 'luci
 import { Product } from '../types';
 import { ConfirmModal } from '../components/ConfirmModal';
 import { SelectModal, SelectOption } from '../components/SelectModal';
+import { EntityPickerModal } from '../components/EntityPickerModal';
 import { parseNumberInput } from '../utils/numbers';
 import { useAndroidBack } from '../hooks/useAndroidBack';
+import { getSizeColor } from '../utils/colors';
 
 export const Products: React.FC = () => {
-  const { products, addProduct, updateProduct, deleteProduct } = useInventory();
+  const { products, addProduct, updateProduct, deleteProduct, entities } = useInventory();
   const [isModalOpen, setIsModalOpen] = useState(false);
   const [searchQuery, setSearchQuery] = useState('');
   const [editingProduct, setEditingProduct] = useState<Product | null>(null);
   const [productToDelete, setProductToDelete] = useState<string | null>(null);
   const [isSizeSelectOpen, setIsSizeSelectOpen] = useState(false);
+  const [isSupplierSelectOpen, setIsSupplierSelectOpen] = useState(false);
 
   const [formData, setFormData] = useState({
     name: '',
@@ -24,6 +27,7 @@ export const Products: React.FC = () => {
     minStock: '',
     category: '',
     size: '' as 'S' | 'M' | 'L' | 'XL' | '',
+    supplierId: '',
   });
 
   const filteredProducts = products.filter(p => 
@@ -43,6 +47,7 @@ export const Products: React.FC = () => {
         minStock: product.minStock.toString(),
         category: product.category || '',
         size: product.size || '',
+        supplierId: product.supplierId || '',
       });
     } else {
       setEditingProduct(null);
@@ -55,6 +60,7 @@ export const Products: React.FC = () => {
         minStock: '5',
         category: '',
         size: '',
+        supplierId: '',
       });
     }
     setIsModalOpen(true);
@@ -86,6 +92,7 @@ export const Products: React.FC = () => {
       minStock: parseInt(formData.minStock) || 0,
       category: formData.category,
       size: formData.size,
+      supplierId: formData.supplierId || undefined,
     };
 
     if (editingProduct) {
@@ -168,7 +175,7 @@ export const Products: React.FC = () => {
                     <h3 className="font-bold text-white text-lg flex items-center gap-2 mb-1">
                       {product.name}
                       {product.size && (
-                        <span className="text-[10px] font-medium bg-indigo-500/10 text-indigo-400 px-2 py-0.5 rounded-md border border-indigo-500/20">
+                        <span className={`text-[10px] font-medium px-2 py-0.5 rounded-md border ${getSizeColor(product.size)}`}>
                           {product.size}
                         </span>
                       )}
@@ -270,6 +277,29 @@ export const Products: React.FC = () => {
                 </div>
 
                 <div>
+                  <label className="block text-sm font-medium text-slate-300 mb-1">المورد (اختياري)</label>
+                  <button
+                    type="button"
+                    onClick={() => setIsSupplierSelectOpen(true)}
+                    className="w-full p-4 border border-slate-700 rounded-2xl focus:ring-2 focus:ring-indigo-500 focus:border-indigo-500 outline-none transition-all bg-slate-800 text-slate-100 flex justify-between items-center text-right group active:scale-[0.99]"
+                  >
+                    <div className="flex flex-col">
+                      <span className={`font-bold ${formData.supplierId ? 'text-white' : 'text-slate-500'}`}>
+                        {formData.supplierId 
+                          ? entities.find(e => e.id === formData.supplierId)?.name || 'مورد غير معروف'
+                          : 'بدون تحديد مورد'}
+                      </span>
+                      {formData.supplierId && (
+                        <span className="text-[10px] text-slate-400 mt-0.5">
+                          {entities.find(e => e.id === formData.supplierId)?.phone || 'لا يوجد رقم هاتف'}
+                        </span>
+                      )}
+                    </div>
+                    <ChevronDown className="w-5 h-5 text-slate-500 group-hover:text-indigo-400 transition-colors" />
+                  </button>
+                </div>
+
+                <div>
                   <label className="block text-sm font-medium text-slate-300 mb-1">وصف المنتج (اختياري)</label>
                   <textarea rows={3} value={formData.description} onChange={e => setFormData({...formData, description: e.target.value})} className="w-full p-3 border border-slate-700 rounded-xl focus:ring-2 focus:ring-indigo-500 focus:border-indigo-500 outline-none transition-all resize-none bg-slate-800 text-slate-100"></textarea>
                 </div>
@@ -302,6 +332,16 @@ export const Products: React.FC = () => {
         onChange={(val) => setFormData({ ...formData, size: val as any })}
         onClose={() => setIsSizeSelectOpen(false)}
         searchable={false}
+      />
+
+      <EntityPickerModal
+        isOpen={isSupplierSelectOpen}
+        entities={entities}
+        selectedId={formData.supplierId}
+        onSelect={(val) => setFormData({ ...formData, supplierId: val })}
+        onClose={() => setIsSupplierSelectOpen(false)}
+        title="اختر المورد"
+        type="supplier"
       />
     </div>
   );
