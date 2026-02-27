@@ -97,11 +97,21 @@ export const InventoryProvider: React.FC<{ children: React.ReactNode }> = ({ chi
       const productsRef = ref(db, 'products');
       const newProductRef = push(productsRef);
       const now = Date.now();
-      await set(newProductRef, {
+      
+      const newProduct = {
         ...productData,
         createdAt: now,
         updatedAt: now,
+      };
+      
+      // Remove undefined values for Firebase
+      Object.keys(newProduct).forEach(key => {
+        if ((newProduct as any)[key] === undefined) {
+          delete (newProduct as any)[key];
+        }
       });
+      
+      await set(newProductRef, newProduct);
     } catch (err) {
       console.error(err);
       throw new Error("فشل في إضافة المنتج");
@@ -111,10 +121,19 @@ export const InventoryProvider: React.FC<{ children: React.ReactNode }> = ({ chi
   const updateProduct = async (id: string, productData: Partial<Product>) => {
     try {
       const productRef = ref(db, `products/${id}`);
-      await update(productRef, {
+      const updateData = {
         ...productData,
         updatedAt: Date.now(),
+      };
+      
+      // Remove undefined values for Firebase
+      Object.keys(updateData).forEach(key => {
+        if ((updateData as any)[key] === undefined) {
+          delete (updateData as any)[key];
+        }
       });
+      
+      await update(productRef, updateData);
     } catch (err) {
       console.error(err);
       throw new Error("فشل في تحديث المنتج");
@@ -142,6 +161,13 @@ export const InventoryProvider: React.FC<{ children: React.ReactNode }> = ({ chi
         date: now,
       };
       
+      // Remove undefined values for Firebase
+      Object.keys(newTransaction).forEach(key => {
+        if ((newTransaction as any)[key] === undefined) {
+          delete (newTransaction as any)[key];
+        }
+      });
+      
       await set(newTransactionRef, newTransaction);
       
       // Update product stock
@@ -162,11 +188,21 @@ export const InventoryProvider: React.FC<{ children: React.ReactNode }> = ({ chi
       const entitiesRef = ref(db, 'entities');
       const newEntityRef = push(entitiesRef);
       const now = Date.now();
-      await set(newEntityRef, {
+      
+      const newEntity = {
         ...entityData,
         createdAt: now,
         updatedAt: now,
+      };
+      
+      // Remove undefined values for Firebase
+      Object.keys(newEntity).forEach(key => {
+        if ((newEntity as any)[key] === undefined) {
+          delete (newEntity as any)[key];
+        }
       });
+      
+      await set(newEntityRef, newEntity);
     } catch (err) {
       console.error(err);
       throw new Error("فشل في إضافة الجهة");
@@ -176,10 +212,19 @@ export const InventoryProvider: React.FC<{ children: React.ReactNode }> = ({ chi
   const updateEntity = async (id: string, entityData: Partial<Entity>) => {
     try {
       const entityRef = ref(db, `entities/${id}`);
-      await update(entityRef, {
+      const updateData = {
         ...entityData,
         updatedAt: Date.now(),
+      };
+      
+      // Remove undefined values for Firebase
+      Object.keys(updateData).forEach(key => {
+        if ((updateData as any)[key] === undefined) {
+          delete (updateData as any)[key];
+        }
       });
+      
+      await update(entityRef, updateData);
     } catch (err) {
       console.error(err);
       throw new Error("فشل في تحديث الجهة");
