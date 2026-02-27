@@ -1,7 +1,7 @@
 import React from 'react';
 import { useNavigate } from 'react-router-dom';
 import { useInventory } from '../context/InventoryContext';
-import { Bell, Package, ArrowUpRight, ArrowDownRight, AlertTriangle, Users, TrendingUp, ChevronLeft, Box, Boxes, LayoutGrid, Wallet, Layers } from 'lucide-react';
+import { Bell, Package, ArrowUpRight, ArrowDownRight, AlertTriangle, Users, TrendingUp, ChevronLeft, Box, Boxes, LayoutGrid, Wallet, Layers, Plus } from 'lucide-react';
 import { format } from 'date-fns';
 import { ar } from 'date-fns/locale';
 import { getSizeColor } from '../utils/colors';
@@ -25,8 +25,8 @@ export const Dashboard: React.FC = () => {
       {/* Sticky Top Header */}
       <div className="sticky top-0 z-30 bg-slate-950/80 backdrop-blur-xl border-b border-white/5 px-6 py-4 flex justify-between items-center shrink-0">
         <div>
-          <h1 className="text-xl font-black tracking-tight text-white">ملخص المخزن</h1>
-          <p className="text-[10px] font-medium text-sky-400 tracking-wider uppercase">الحالة الحالية للمستودع</p>
+          <h1 className="text-xl font-black tracking-tight text-white">Gloves</h1>
+          <p className="text-[10px] font-medium text-sky-400 tracking-wider uppercase">نظام إدارة المخزون الاحترافي</p>
         </div>
         <div className="flex gap-2">
           <button className="relative p-2.5 bg-white/5 rounded-xl hover:bg-white/10 transition-colors active:scale-95 border border-white/10">
@@ -73,6 +73,23 @@ export const Dashboard: React.FC = () => {
         </div>
 
         <div className="px-5 space-y-6">
+          {/* New Transaction Buttons */}
+          <div className="flex gap-3">
+            <button 
+              onClick={() => navigate('/reports', { state: { openAdd: 'out' } })}
+              className="flex-1 text-xs font-bold text-sky-400 bg-sky-500/10 px-4 py-3 rounded-xl border border-sky-500/20 active:scale-95 transition-all"
+            >
+              تسجيل بيع جديد
+            </button>
+
+            <button 
+              onClick={() => navigate('/products', { state: { openAdd: true } })}
+              className="flex-1 text-xs font-bold text-emerald-400 bg-emerald-500/10 px-4 py-3 rounded-xl border border-emerald-500/20 active:scale-95 transition-all"
+            >
+              تسجيل شراء جديد
+            </button>
+          </div>
+
         {/* Quick Actions / Summary Cards */}
         <div className="grid grid-cols-3 gap-3">
           <button 

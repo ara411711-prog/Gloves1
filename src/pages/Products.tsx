@@ -1,4 +1,5 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
+import { useLocation } from 'react-router-dom';
 import { useInventory } from '../context/InventoryContext';
 import { Plus, Edit2, Trash2, Package, Search, X, Copy, ChevronDown } from 'lucide-react';
 import { Product } from '../types';
@@ -11,6 +12,7 @@ import { getSizeColor } from '../utils/colors';
 
 export const Products: React.FC = () => {
   const { products, addProduct, updateProduct, deleteProduct, entities } = useInventory();
+  const location = useLocation();
   const [isModalOpen, setIsModalOpen] = useState(false);
   const [searchQuery, setSearchQuery] = useState('');
   const [editingProduct, setEditingProduct] = useState<Product | null>(null);
@@ -34,6 +36,14 @@ export const Products: React.FC = () => {
     p.name.toLowerCase().includes(searchQuery.toLowerCase()) || 
     (p.category && p.category.toLowerCase().includes(searchQuery.toLowerCase()))
   );
+
+  useEffect(() => {
+    if (location.state?.openAdd) {
+      handleOpenModal();
+      // Clear state so it doesn't reopen on refresh
+      window.history.replaceState({}, document.title);
+    }
+  }, [location.state]);
 
   const handleOpenModal = (product?: Product) => {
     if (product) {
@@ -256,7 +266,7 @@ export const Products: React.FC = () => {
                 </div>
 
                 <div>
-                  <label className="block text-sm font-medium text-slate-300 mb-1">الحد الأدنى للمخزون</label>
+                  <label className="block text-sm font-medium text-slate-300 mb-1">تنبيه عند وصول المخزون إلى (الحد الأدنى)</label>
                   <input required type="text" inputMode="decimal" value={formData.minStock} onChange={e => setFormData({...formData, minStock: parseNumberInput(e.target.value)})} className="w-full p-3 border border-slate-700 rounded-xl focus:ring-2 focus:ring-indigo-500 focus:border-indigo-500 outline-none transition-all bg-slate-800 text-slate-100 text-right" />
                 </div>
 

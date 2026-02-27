@@ -1,6 +1,6 @@
 import React, { useState, useMemo, useEffect } from 'react';
 import { useInventory } from '../context/InventoryContext';
-import { FileSpreadsheet, FileText, ArrowDownRight, ArrowUpRight, Trash2, Calendar, Filter, ChevronDown, Plus, X, Search, ShoppingCart, Truck } from 'lucide-react';
+import { FileSpreadsheet, FileText, ArrowDownRight, ArrowUpRight, Trash2, Calendar, Filter, ChevronDown, Plus, X, Search, ShoppingCart, Truck, Check } from 'lucide-react';
 import { format, isSameDay, isSameMonth } from 'date-fns';
 import { ar } from 'date-fns/locale';
 import { useLocation } from 'react-router-dom';
@@ -11,18 +11,24 @@ import { ConfirmModal } from '../components/ConfirmModal';
 import { SelectModal, SelectOption } from '../components/SelectModal';
 import { ProductPickerModal } from '../components/ProductPickerModal';
 import { EntityPickerModal } from '../components/EntityPickerModal';
+import { InvoiceModal } from '../components/InvoiceModal';
+import { DeleteTransactionModal } from '../components/DeleteTransactionModal';
 import { handleShare } from '../utils/androidBridge';
 import { parseNumberInput } from '../utils/numbers';
 import { useAndroidBack } from '../hooks/useAndroidBack';
 import { getSizeColor } from '../utils/colors';
+import { Transaction } from '../types';
 
 type FilterType = 'daily' | 'monthly' | 'all' | 'custom';
 
 export const Reports: React.FC = () => {
-  const { transactions, products, entities, clearTransactions, addTransaction } = useInventory();
+  const { transactions, products, entities, clearTransactions, addTransaction, deleteTransaction, deleteTransactions } = useInventory();
   const location = useLocation();
   const [isExporting, setIsExporting] = useState(false);
   const [isClearModalOpen, setIsClearModalOpen] = useState(false);
+  const [isDeleteDayModalOpen, setIsDeleteDayModalOpen] = useState(false);
+  const [isDeleteSingleModalOpen, setIsDeleteSingleModalOpen] = useState(false);
+  const [transactionToDelete, setTransactionToDelete] = useState<string | null>(null);
   const [filterType, setFilterType] = useState<FilterType>('daily');
   const [selectedDate, setSelectedDate] = useState(new Date());
   
@@ -38,6 +44,10 @@ export const Reports: React.FC = () => {
     entityId: '',
     notes: '',
   });
+
+  // Invoice Modal State
+  const [selectedInvoiceTransaction, setSelectedInvoiceTransaction] = useState<Transaction | null>(null);
+  const [isInvoiceModalOpen, setIsInvoiceModalOpen] = useState(false);
 
   useEffect(() => {
     const state = location.state as { openAdd?: 'in' | 'out', productId?: string };
@@ -110,7 +120,31 @@ export const Reports: React.FC = () => {
     };
   }, [transactions, sortedTransactions]);
 
-  // Add Transaction Handlers
+  const handleOpenInvoice = (transaction: Transaction) => {
+    setSelectedInvoiceTransaction(transaction);
+    setIsInvoiceModalOpen(true);
+  };
+
+  const handleDelete = async (revertStock: boolean) => {
+    try {
+      if (isDeleteSingleModalOpen && transactionToDelete) {
+        await deleteTransaction(transactionToDelete, revertStock);
+        setIsDeleteSingleModalOpen(false);
+        setTransactionToDelete(null);
+      } else if (isDeleteDayModalOpen) {
+        const idsToDelete = filteredTransactions.map(t => t.id);
+        await deleteTransactions(idsToDelete, revertStock);
+        setIsDeleteDayModalOpen(false);
+      } else if (isClearModalOpen) {
+        const ids = transactions.map(t => t.id);
+        await deleteTransactions(ids, revertStock);
+        setIsClearModalOpen(false);
+      }
+    } catch (err) {
+      console.error(err);
+      alert('فشل في الحذف');
+    }
+  };
   const handleOpenAddModal = (type: 'in' | 'out') => {
     setTransactionType(type);
     setFormData({
@@ -168,11 +202,11 @@ export const Reports: React.FC = () => {
     const wb = XLSX.utils.book_new();
     
     const excelData = [
-      ['نظام إدارة المخزون'],
+      ['تطبيق Gloves'],
       ['تقرير العمليات الشامل'],
       ['تاريخ التقرير:', format(new Date(), 'yyyy/MM/dd hh:mm a', { locale: ar })],
       [],
-      ['التاريخ', 'العملية', 'المنتج', 'الجهة', 'الكمية', 'السعر', 'الإجمالي']
+      ['التاريخ', 'العملية', 'المنتج', 'الحجم', 'الجهة', 'الكمية', 'السعر', 'الإجمالي']
     ];
 
     sortedTransactions.forEach(t => {
@@ -182,6 +216,7 @@ export const Reports: React.FC = () => {
         format(new Date(t.date), 'yyyy/MM/dd hh:mm a', { locale: ar }),
         t.type === 'out' ? 'بيع' : 'شراء',
         product?.name || 'منتج محذوف',
+        product?.size || '-',
         entity?.name || 'غير محدد',
         t.quantity,
         Math.round(t.price),
@@ -195,6 +230,7 @@ export const Reports: React.FC = () => {
       { wch: 20 },
       { wch: 10 },
       { wch: 25 },
+      { wch: 10 },
       { wch: 25 },
       { wch: 10 },
       { wch: 15 },
@@ -202,13 +238,13 @@ export const Reports: React.FC = () => {
     ];
 
     ws['!merges'] = [
-      { s: { r: 0, c: 0 }, e: { r: 0, c: 6 } },
-      { s: { r: 1, c: 0 }, e: { r: 1, c: 6 } },
+      { s: { r: 0, c: 0 }, e: { r: 0, c: 7 } },
+      { s: { r: 1, c: 0 }, e: { r: 1, c: 7 } },
     ];
     
     XLSX.utils.book_append_sheet(wb, ws, "العمليات");
     const excelBuffer = XLSX.write(wb, { bookType: 'xlsx', type: 'array' });
-    const file = new File([excelBuffer], `تقرير_العمليات_الشامل.xlsx`, { type: 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet' });
+    const file = new File([excelBuffer], `Gloves_Report_${format(new Date(), 'yyyy_MM_dd')}.xlsx`, { type: 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet' });
     handleShare(file, 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet');
   };
 
@@ -246,7 +282,7 @@ export const Reports: React.FC = () => {
       }
 
       const pdfBlob = pdf.output('blob');
-      const file = new File([pdfBlob], `تقرير_العمليات_الشامل.pdf`, { type: 'application/pdf' });
+      const file = new File([pdfBlob], `Gloves_Report_${format(new Date(), 'yyyy_MM_dd')}.pdf`, { type: 'application/pdf' });
       handleShare(file, 'application/pdf');
     } catch (error) {
       console.error('Error generating PDF', error);
@@ -273,18 +309,20 @@ export const Reports: React.FC = () => {
             </button>
             <button 
               onClick={exportExcel}
-              className="bg-emerald-500/10 hover:bg-emerald-500/20 text-emerald-400 p-3 rounded-2xl transition-colors border border-emerald-500/20 active:scale-95"
+              className="flex items-center gap-2 bg-emerald-500/10 hover:bg-emerald-500/20 text-emerald-400 px-4 py-3 rounded-2xl transition-colors border border-emerald-500/20 active:scale-95 font-black text-sm"
               title="تصدير إكسل"
             >
               <FileSpreadsheet className="w-5 h-5" />
+              <span className="hidden sm:inline">Excel</span>
             </button>
             <button 
               onClick={exportPDF}
               disabled={isExporting}
-              className="bg-red-500/10 hover:bg-red-500/20 text-red-400 p-3 rounded-2xl transition-colors border border-red-500/20 disabled:opacity-50 active:scale-95"
+              className="flex items-center gap-2 bg-red-500/10 hover:bg-red-500/20 text-red-400 px-4 py-3 rounded-2xl transition-colors border border-red-500/20 disabled:opacity-50 active:scale-95 font-black text-sm"
               title="تصدير PDF"
             >
               <FileText className="w-5 h-5" />
+              <span className="hidden sm:inline">PDF</span>
             </button>
           </div>
         </div>
@@ -355,12 +393,23 @@ export const Reports: React.FC = () => {
               </div>
               <h2 className="text-lg font-black text-white">المبيعات (بيع)</h2>
             </div>
-            <button 
-              onClick={() => handleOpenAddModal('out')}
-              className="text-[10px] font-bold text-sky-400 bg-sky-500/10 px-3 py-1.5 rounded-xl border border-sky-500/20 active:scale-95"
-            >
-              تسجيل بيع جديد
-            </button>
+            <div className="flex gap-2">
+              {stats.sales.list.length > 0 && (
+                <button 
+                  onClick={() => setIsDeleteDayModalOpen(true)}
+                  className="p-1.5 bg-red-500/10 text-red-400 rounded-lg border border-red-500/20 active:scale-95"
+                  title="حذف مبيعات الفترة"
+                >
+                  <Trash2 className="w-4 h-4" />
+                </button>
+              )}
+              <button 
+                onClick={() => handleOpenAddModal('out')}
+                className="text-[10px] font-bold text-sky-400 bg-sky-500/10 px-3 py-1.5 rounded-xl border border-sky-500/20 active:scale-95"
+              >
+                تسجيل بيع جديد
+              </button>
+            </div>
           </div>
 
           <div className="grid grid-cols-3 gap-2 mb-4">
@@ -390,8 +439,10 @@ export const Reports: React.FC = () => {
                     <tr>
                       <th className="px-4 py-3 font-bold">التاريخ</th>
                       <th className="px-4 py-3 font-bold">المنتج</th>
+                      <th className="px-4 py-3 font-bold">الحجم</th>
                       <th className="px-4 py-3 font-bold">الكمية</th>
                       <th className="px-4 py-3 font-bold text-sky-400">الإجمالي</th>
+                      <th className="px-4 py-3 font-bold text-center">الإجراءات</th>
                     </tr>
                   </thead>
                   <tbody className="divide-y divide-white/5">
@@ -405,10 +456,35 @@ export const Reports: React.FC = () => {
                           </td>
                           <td className="px-4 py-3 font-bold text-white">
                             {product?.name || 'محذوف'}
-                            {product?.size && <span className={`text-[9px] px-1 py-0.5 rounded-md mr-1 border ${getSizeColor(product.size)}`}>{product.size}</span>}
+                          </td>
+                          <td className="px-4 py-3 font-bold text-slate-300">
+                            {product?.size ? (
+                              <span className={`text-[10px] px-2 py-0.5 rounded-md border ${getSizeColor(product.size)}`}>
+                                {product.size}
+                              </span>
+                            ) : '-'}
                           </td>
                           <td className="px-4 py-3 font-black">{t.quantity}</td>
                           <td className="px-4 py-3 font-black text-sky-400 bg-sky-500/5">{Math.round(t.total).toLocaleString()}</td>
+                          <td className="px-4 py-3 text-center">
+                            <div className="flex items-center justify-center gap-2">
+                              <button 
+                                onClick={() => handleOpenInvoice(t)}
+                                className="p-2 bg-white/5 hover:bg-white/10 text-slate-400 hover:text-white rounded-xl transition-all active:scale-90 border border-white/5"
+                              >
+                                <FileText className="w-4 h-4" />
+                              </button>
+                              <button 
+                                onClick={() => {
+                                  setTransactionToDelete(t.id);
+                                  setIsDeleteSingleModalOpen(true);
+                                }}
+                                className="p-2 bg-red-500/5 hover:bg-red-500/10 text-red-400/50 hover:text-red-400 rounded-xl transition-all active:scale-90 border border-white/5"
+                              >
+                                <Trash2 className="w-4 h-4" />
+                              </button>
+                            </div>
+                          </td>
                         </tr>
                       );
                     })}
@@ -428,12 +504,23 @@ export const Reports: React.FC = () => {
               </div>
               <h2 className="text-lg font-black text-white">المشتريات (إضافة منتج)</h2>
             </div>
-            <button 
-              onClick={() => handleOpenAddModal('in')}
-              className="text-[10px] font-bold text-emerald-400 bg-emerald-500/10 px-3 py-1.5 rounded-xl border border-emerald-500/20 active:scale-95"
-            >
-              تسجيل شراء جديد
-            </button>
+            <div className="flex gap-2">
+              {stats.purchases.list.length > 0 && (
+                <button 
+                  onClick={() => setIsDeleteDayModalOpen(true)}
+                  className="p-1.5 bg-red-500/10 text-red-400 rounded-lg border border-red-500/20 active:scale-95"
+                  title="حذف مشتريات الفترة"
+                >
+                  <Trash2 className="w-4 h-4" />
+                </button>
+              )}
+              <button 
+                onClick={() => handleOpenAddModal('in')}
+                className="text-[10px] font-bold text-emerald-400 bg-emerald-500/10 px-3 py-1.5 rounded-xl border border-emerald-500/20 active:scale-95"
+              >
+                تسجيل شراء جديد
+              </button>
+            </div>
           </div>
 
           <div className="grid grid-cols-3 gap-2 mb-4">
@@ -463,8 +550,10 @@ export const Reports: React.FC = () => {
                     <tr>
                       <th className="px-4 py-3 font-bold">التاريخ</th>
                       <th className="px-4 py-3 font-bold">المنتج</th>
+                      <th className="px-4 py-3 font-bold">الحجم</th>
                       <th className="px-4 py-3 font-bold">الكمية</th>
                       <th className="px-4 py-3 font-bold text-emerald-400">الإجمالي</th>
+                      <th className="px-4 py-3 font-bold text-center">الإجراءات</th>
                     </tr>
                   </thead>
                   <tbody className="divide-y divide-white/5">
@@ -478,10 +567,35 @@ export const Reports: React.FC = () => {
                           </td>
                           <td className="px-4 py-3 font-bold text-white">
                             {product?.name || 'محذوف'}
-                            {product?.size && <span className={`text-[9px] px-1 py-0.5 rounded-md mr-1 border ${getSizeColor(product.size)}`}>{product.size}</span>}
+                          </td>
+                          <td className="px-4 py-3 font-bold text-slate-300">
+                            {product?.size ? (
+                              <span className={`text-[10px] px-2 py-0.5 rounded-md border ${getSizeColor(product.size)}`}>
+                                {product.size}
+                              </span>
+                            ) : '-'}
                           </td>
                           <td className="px-4 py-3 font-black">{t.quantity}</td>
                           <td className="px-4 py-3 font-black text-emerald-400 bg-emerald-500/5">{Math.round(t.total).toLocaleString()}</td>
+                          <td className="px-4 py-3 text-center">
+                            <div className="flex items-center justify-center gap-2">
+                              <button 
+                                onClick={() => handleOpenInvoice(t)}
+                                className="p-2 bg-white/5 hover:bg-white/10 text-slate-400 hover:text-white rounded-xl transition-all active:scale-90 border border-white/5"
+                              >
+                                <FileText className="w-4 h-4" />
+                              </button>
+                              <button 
+                                onClick={() => {
+                                  setTransactionToDelete(t.id);
+                                  setIsDeleteSingleModalOpen(true);
+                                }}
+                                className="p-2 bg-red-500/5 hover:bg-red-500/10 text-red-400/50 hover:text-red-400 rounded-xl transition-all active:scale-90 border border-white/5"
+                              >
+                                <Trash2 className="w-4 h-4" />
+                              </button>
+                            </div>
+                          </td>
                         </tr>
                       );
                     })}
@@ -492,6 +606,30 @@ export const Reports: React.FC = () => {
           )}
         </section>
       </div>
+
+      {/* Invoice Modal */}
+      {selectedInvoiceTransaction && (
+        <InvoiceModal
+          isOpen={isInvoiceModalOpen}
+          onClose={() => setIsInvoiceModalOpen(false)}
+          transaction={selectedInvoiceTransaction}
+          product={products.find(p => p.id === selectedInvoiceTransaction.productId)}
+          entity={entities.find(e => e.id === selectedInvoiceTransaction.entityId)}
+        />
+      )}
+
+      {/* Confirmation Modals */}
+      <DeleteTransactionModal
+        isOpen={isDeleteSingleModalOpen || isDeleteDayModalOpen || isClearModalOpen}
+        onClose={() => {
+          setIsDeleteSingleModalOpen(false);
+          setIsDeleteDayModalOpen(false);
+          setIsClearModalOpen(false);
+        }}
+        onConfirm={handleDelete}
+        title={isClearModalOpen ? 'مسح كافة العمليات' : isDeleteDayModalOpen ? 'حذف عمليات الفترة' : 'حذف العملية'}
+        message={isClearModalOpen ? 'هل أنت متأكد من مسح كافة سجلات العمليات؟' : isDeleteDayModalOpen ? 'هل أنت متأكد من حذف كافة العمليات المعروضة في هذه الفترة؟' : 'هل أنت متأكد من حذف هذه العملية؟'}
+      />
 
       {/* Hidden PDF Pages */}
       <div style={{ position: 'absolute', top: '-9999px', left: '-9999px', zIndex: -1000 }}>
@@ -513,7 +651,7 @@ export const Reports: React.FC = () => {
           >
             <div style={{ display: 'flex', justifyContent: 'space-between', borderBottom: '2px solid #e2e8f0', paddingBottom: '16px', marginBottom: '24px' }}>
               <div>
-                <h1 style={{ fontSize: '24px', fontWeight: 'bold', color: '#1e293b', margin: 0 }}>نظام إدارة المخزون</h1>
+                <h1 style={{ fontSize: '24px', fontWeight: 'bold', color: '#1e293b', margin: 0 }}>تطبيق Gloves</h1>
                 <p style={{ fontSize: '14px', color: '#64748b', margin: '4px 0 0 0' }}>تقرير العمليات الشامل</p>
               </div>
               <div style={{ textAlign: 'left' }}>
@@ -529,6 +667,7 @@ export const Reports: React.FC = () => {
                   <th style={{ padding: '12px', borderBottom: '1px solid #cbd5e1', fontWeight: 'bold' }}>التاريخ</th>
                   <th style={{ padding: '12px', borderBottom: '1px solid #cbd5e1', fontWeight: 'bold' }}>العملية</th>
                   <th style={{ padding: '12px', borderBottom: '1px solid #cbd5e1', fontWeight: 'bold' }}>المنتج</th>
+                  <th style={{ padding: '12px', borderBottom: '1px solid #cbd5e1', fontWeight: 'bold' }}>الحجم</th>
                   <th style={{ padding: '12px', borderBottom: '1px solid #cbd5e1', fontWeight: 'bold' }}>الجهة</th>
                   <th style={{ padding: '12px', borderBottom: '1px solid #cbd5e1', fontWeight: 'bold' }}>الكمية</th>
                   <th style={{ padding: '12px', borderBottom: '1px solid #cbd5e1', fontWeight: 'bold' }}>السعر</th>
@@ -550,6 +689,9 @@ export const Reports: React.FC = () => {
                       </td>
                       <td style={{ padding: '12px', borderBottom: '1px solid #e2e8f0', color: '#1e293b', fontWeight: 'bold' }}>
                         {product?.name || 'منتج محذوف'}
+                      </td>
+                      <td style={{ padding: '12px', borderBottom: '1px solid #e2e8f0', color: '#475569' }}>
+                        {product?.size || '-'}
                       </td>
                       <td style={{ padding: '12px', borderBottom: '1px solid #e2e8f0', color: '#475569' }}>
                         {entity?.name || '-'}
@@ -579,22 +721,11 @@ export const Reports: React.FC = () => {
             )}
             
             <div style={{ marginTop: 'auto', paddingTop: '32px', textAlign: 'center' }}>
-              <p style={{ fontSize: '10px', color: '#94a3b8', margin: 0 }}>تم إنشاء هذا التقرير بواسطة تطبيق نظام إدارة المخزون</p>
+              <p style={{ fontSize: '10px', color: '#94a3b8', margin: 0 }}>تم إنشاء هذا التقرير بواسطة تطبيق Gloves</p>
             </div>
           </div>
         ))}
       </div>
-
-      <ConfirmModal
-        isOpen={isClearModalOpen}
-        title="تنظيف التقارير"
-        message="هل أنت متأكد من رغبتك في مسح جميع التقارير والعمليات المسجلة؟ لا يمكن التراجع عن هذا الإجراء."
-        confirmText="مسح الكل"
-        onConfirm={async () => {
-          await clearTransactions();
-        }}
-        onCancel={() => setIsClearModalOpen(false)}
-      />
 
       {/* Add Transaction Modal */}
       {isAddModalOpen && (

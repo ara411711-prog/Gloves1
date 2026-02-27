@@ -1,20 +1,33 @@
 import React, { useState } from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
 import { useInventory } from '../context/InventoryContext';
-import { ArrowRight, Phone, MapPin, MessageCircle, ArrowDownRight, ArrowUpRight, Share2, FileText, FileSpreadsheet } from 'lucide-react';
+import { ArrowRight, Phone, MapPin, MessageCircle, ArrowDownRight, ArrowUpRight, Share2, FileText, FileSpreadsheet, Trash2, Eye, AlertCircle, X, Check } from 'lucide-react';
 import { format } from 'date-fns';
 import { ar } from 'date-fns/locale';
 import * as XLSX from 'xlsx';
 import jsPDF from 'jspdf';
 import { toPng } from 'html-to-image';
 import { handleShare } from '../utils/androidBridge';
+import { getSizeColor } from '../utils/colors';
+import { InvoiceModal } from '../components/InvoiceModal';
+import { DeleteTransactionModal } from '../components/DeleteTransactionModal';
+import { Transaction } from '../types';
 
 export const EntityDetails: React.FC = () => {
   const { id } = useParams<{ id: string }>();
   const navigate = useNavigate();
-  const { entities, transactions, products } = useInventory();
+  const { entities, transactions, products, deleteTransaction, deleteTransactions } = useInventory();
 
   const [isExporting, setIsExporting] = useState(false);
+  const [selectedTransaction, setSelectedTransaction] = useState<Transaction | null>(null);
+  const [isInvoiceOpen, setIsInvoiceOpen] = useState(false);
+  
+  // Deletion state
+  const [deleteModal, setDeleteModal] = useState<{
+    isOpen: boolean;
+    type: 'single' | 'all';
+    transactionId?: string;
+  }>({ isOpen: false, type: 'single' });
 
   const entity = entities.find(e => e.id === id);
 
@@ -37,11 +50,11 @@ export const EntityDetails: React.FC = () => {
     const wb = XLSX.utils.book_new();
     
     const excelData = [
-      ['نظام إدارة المخزون'],
+      ['تطبيق Gloves'],
       [`تقرير عمليات: ${entity.name}`],
       ['تاريخ التقرير:', format(new Date(), 'yyyy/MM/dd hh:mm a', { locale: ar })],
       [],
-      ['التاريخ', 'العملية', 'المنتج', 'الكمية', 'السعر', 'الإجمالي']
+      ['التاريخ', 'العملية', 'المنتج', 'الحجم', 'الكمية', 'السعر', 'الإجمالي']
     ];
 
     entityTransactions.forEach(t => {
@@ -50,6 +63,7 @@ export const EntityDetails: React.FC = () => {
         format(new Date(t.date), 'yyyy/MM/dd hh:mm a', { locale: ar }),
         t.type === 'out' ? 'بيع' : 'شراء',
         product?.name || 'منتج محذوف',
+        product?.size || '-',
         t.quantity,
         Math.round(t.price),
         Math.round(t.total)
@@ -63,18 +77,19 @@ export const EntityDetails: React.FC = () => {
       { wch: 10 },
       { wch: 25 },
       { wch: 10 },
+      { wch: 10 },
       { wch: 15 },
       { wch: 15 },
     ];
 
     ws['!merges'] = [
-      { s: { r: 0, c: 0 }, e: { r: 0, c: 5 } },
-      { s: { r: 1, c: 0 }, e: { r: 1, c: 5 } },
+      { s: { r: 0, c: 0 }, e: { r: 0, c: 6 } },
+      { s: { r: 1, c: 0 }, e: { r: 1, c: 6 } },
     ];
     
     XLSX.utils.book_append_sheet(wb, ws, "العمليات");
     const excelBuffer = XLSX.write(wb, { bookType: 'xlsx', type: 'array' });
-    const file = new File([excelBuffer], `عمليات_${entity.name}.xlsx`, { type: 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet' });
+    const file = new File([excelBuffer], `Gloves_Operations_${entity.name}.xlsx`, { type: 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet' });
     handleShare(file, 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet');
   };
 
@@ -112,12 +127,27 @@ export const EntityDetails: React.FC = () => {
       }
 
       const pdfBlob = pdf.output('blob');
-      const file = new File([pdfBlob], `عمليات_${entity.name}.pdf`, { type: 'application/pdf' });
+      const file = new File([pdfBlob], `Gloves_Operations_${entity.name}.pdf`, { type: 'application/pdf' });
       handleShare(file, 'application/pdf');
     } catch (error) {
       console.error('Error generating PDF', error);
     } finally {
       setIsExporting(false);
+    }
+  };
+
+  const handleDelete = async (revertStock: boolean) => {
+    try {
+      if (deleteModal.type === 'single' && deleteModal.transactionId) {
+        await deleteTransaction(deleteModal.transactionId, revertStock);
+      } else if (deleteModal.type === 'all') {
+        const ids = entityTransactions.map(t => t.id);
+        await deleteTransactions(ids, revertStock);
+      }
+      setDeleteModal({ isOpen: false, type: 'single' });
+    } catch (err) {
+      console.error(err);
+      alert('فشل في الحذف');
     }
   };
 
@@ -168,23 +198,31 @@ export const EntityDetails: React.FC = () => {
 
       {/* Transactions Table */}
       <div className="flex-1 overflow-y-auto p-4 pb-28">
-        <div className="flex justify-between items-center mb-4 px-2">
-          <h2 className="text-xl font-bold text-white">سجل العمليات</h2>
+        <div className="flex flex-col gap-4 mb-6 px-2">
+          <div className="flex justify-between items-center">
+            <h2 className="text-xl font-bold text-white">سجل العمليات</h2>
+            <button 
+              onClick={() => setDeleteModal({ isOpen: true, type: 'all' })}
+              className="px-4 py-2 bg-red-500/10 text-red-400 rounded-xl text-xs font-bold border border-red-500/20 hover:bg-red-500/20 transition-colors"
+            >
+              حذف الكل
+            </button>
+          </div>
           <div className="flex gap-2">
             <button 
               onClick={exportExcel}
-              className="flex items-center gap-2 bg-emerald-500/10 hover:bg-emerald-500/20 text-emerald-400 px-4 py-2.5 rounded-2xl transition-colors text-sm font-bold border border-emerald-500/20 active:scale-95"
+              className="flex-1 flex items-center justify-center gap-2 bg-emerald-500/10 hover:bg-emerald-500/20 text-emerald-400 px-4 py-3 rounded-2xl transition-colors text-sm font-bold border border-emerald-500/20 active:scale-95"
             >
               <FileSpreadsheet className="w-4 h-4" />
-              <span>إكسل</span>
+              <span>تصدير إكسل</span>
             </button>
             <button 
               onClick={exportPDF}
               disabled={isExporting}
-              className="flex items-center gap-2 bg-red-500/10 hover:bg-red-500/20 text-red-400 px-4 py-2.5 rounded-2xl transition-colors text-sm font-bold border border-red-500/20 disabled:opacity-50 active:scale-95"
+              className="flex-1 flex items-center justify-center gap-2 bg-red-500/10 hover:bg-red-500/20 text-red-400 px-4 py-3 rounded-2xl transition-colors text-sm font-bold border border-red-500/20 disabled:opacity-50 active:scale-95"
             >
               <FileText className="w-4 h-4" />
-              <span>{isExporting ? 'جاري...' : 'PDF'}</span>
+              <span>{isExporting ? 'جاري...' : 'تصدير PDF'}</span>
             </button>
           </div>
         </div>
@@ -202,9 +240,10 @@ export const EntityDetails: React.FC = () => {
                     <th className="px-4 py-4 font-bold whitespace-nowrap uppercase tracking-wider text-[10px]">التاريخ</th>
                     <th className="px-4 py-4 font-bold whitespace-nowrap uppercase tracking-wider text-[10px]">العملية</th>
                     <th className="px-4 py-4 font-bold whitespace-nowrap uppercase tracking-wider text-[10px]">المنتج</th>
+                    <th className="px-4 py-4 font-bold whitespace-nowrap uppercase tracking-wider text-[10px]">الحجم</th>
                     <th className="px-4 py-4 font-bold whitespace-nowrap uppercase tracking-wider text-[10px]">الكمية</th>
-                    <th className="px-4 py-4 font-bold whitespace-nowrap uppercase tracking-wider text-[10px]">السعر</th>
                     <th className="px-4 py-4 font-bold whitespace-nowrap uppercase tracking-wider text-[10px] text-indigo-400">الإجمالي</th>
+                    <th className="px-4 py-4 font-bold whitespace-nowrap uppercase tracking-wider text-[10px] text-center">إجراءات</th>
                   </tr>
                 </thead>
                 <tbody className="divide-y divide-white/5">
@@ -226,16 +265,38 @@ export const EntityDetails: React.FC = () => {
                         </td>
                         <td className="px-4 py-3 whitespace-nowrap font-bold text-white">
                           {product?.name || 'منتج محذوف'}
-                          {product?.size && <span className="text-indigo-400 text-[10px] bg-indigo-500/10 px-1.5 py-0.5 rounded-md mr-2 border border-indigo-500/20">{product.size}</span>}
+                        </td>
+                        <td className="px-4 py-3 font-bold text-slate-300">
+                          {product?.size ? (
+                            <span className={`text-[10px] px-2 py-0.5 rounded-md border ${getSizeColor(product.size)}`}>
+                              {product.size}
+                            </span>
+                          ) : '-'}
                         </td>
                         <td className="px-4 py-3 font-black text-slate-200">
                           {transaction.quantity}
                         </td>
-                        <td className="px-4 py-3 font-bold text-slate-300">
-                          {Math.round(transaction.price).toLocaleString()}
-                        </td>
                         <td className="px-4 py-3 font-black text-indigo-400 bg-indigo-500/5">
                           {Math.round(transaction.total).toLocaleString()}
+                        </td>
+                        <td className="px-4 py-3 whitespace-nowrap">
+                          <div className="flex items-center justify-center gap-2">
+                            <button 
+                              onClick={() => {
+                                setSelectedTransaction(transaction);
+                                setIsInvoiceOpen(true);
+                              }}
+                              className="p-2 bg-sky-500/10 text-sky-400 rounded-xl hover:bg-sky-500/20 transition-colors border border-sky-500/20"
+                            >
+                              <Eye className="w-4 h-4" />
+                            </button>
+                            <button 
+                              onClick={() => setDeleteModal({ isOpen: true, type: 'single', transactionId: transaction.id })}
+                              className="p-2 bg-red-500/10 text-red-400 rounded-xl hover:bg-red-500/20 transition-colors border border-red-500/20"
+                            >
+                              <Trash2 className="w-4 h-4" />
+                            </button>
+                          </div>
                         </td>
                       </tr>
                     );
@@ -246,6 +307,26 @@ export const EntityDetails: React.FC = () => {
           </div>
         )}
       </div>
+
+      {/* Delete Confirmation Modal */}
+      <DeleteTransactionModal
+        isOpen={deleteModal.isOpen}
+        onClose={() => setDeleteModal({ isOpen: false, type: 'single' })}
+        onConfirm={handleDelete}
+        title={deleteModal.type === 'all' ? 'حذف كافة العمليات' : 'حذف العملية'}
+        message={deleteModal.type === 'all' ? 'هل أنت متأكد من حذف كافة العمليات لهذه الجهة؟' : 'هل أنت متأكد من حذف هذه العملية؟'}
+      />
+
+      {/* Invoice Modal */}
+      {selectedTransaction && (
+        <InvoiceModal
+          isOpen={isInvoiceOpen}
+          onClose={() => setIsInvoiceOpen(false)}
+          transaction={selectedTransaction}
+          product={products.find(p => p.id === selectedTransaction.productId)}
+          entity={entity}
+        />
+      )}
 
       {/* Hidden PDF Pages */}
       <div style={{ position: 'absolute', top: '-9999px', left: '-9999px', zIndex: -1000 }}>
@@ -267,7 +348,7 @@ export const EntityDetails: React.FC = () => {
           >
             <div style={{ display: 'flex', justifyContent: 'space-between', borderBottom: '2px solid #e2e8f0', paddingBottom: '16px', marginBottom: '24px' }}>
               <div>
-                <h1 style={{ fontSize: '24px', fontWeight: 'bold', color: '#1e293b', margin: 0 }}>نظام إدارة المخزون</h1>
+                <h1 style={{ fontSize: '24px', fontWeight: 'bold', color: '#1e293b', margin: 0 }}>Gloves</h1>
                 <p style={{ fontSize: '14px', color: '#64748b', margin: '4px 0 0 0' }}>تقرير عمليات: {entity.name}</p>
               </div>
               <div style={{ textAlign: 'left' }}>
@@ -290,6 +371,7 @@ export const EntityDetails: React.FC = () => {
                   <th style={{ padding: '12px', borderBottom: '1px solid #cbd5e1', fontWeight: 'bold' }}>التاريخ</th>
                   <th style={{ padding: '12px', borderBottom: '1px solid #cbd5e1', fontWeight: 'bold' }}>العملية</th>
                   <th style={{ padding: '12px', borderBottom: '1px solid #cbd5e1', fontWeight: 'bold' }}>المنتج</th>
+                  <th style={{ padding: '12px', borderBottom: '1px solid #cbd5e1', fontWeight: 'bold' }}>الحجم</th>
                   <th style={{ padding: '12px', borderBottom: '1px solid #cbd5e1', fontWeight: 'bold' }}>الكمية</th>
                   <th style={{ padding: '12px', borderBottom: '1px solid #cbd5e1', fontWeight: 'bold' }}>السعر</th>
                   <th style={{ padding: '12px', borderBottom: '1px solid #cbd5e1', fontWeight: 'bold' }}>الإجمالي</th>
@@ -309,6 +391,9 @@ export const EntityDetails: React.FC = () => {
                       </td>
                       <td style={{ padding: '12px', borderBottom: '1px solid #e2e8f0', color: '#1e293b', fontWeight: 'bold' }}>
                         {product?.name || 'منتج محذوف'}
+                      </td>
+                      <td style={{ padding: '12px', borderBottom: '1px solid #e2e8f0', color: '#475569' }}>
+                        {product?.size || '-'}
                       </td>
                       <td style={{ padding: '12px', borderBottom: '1px solid #e2e8f0', color: '#1e293b' }} dir="ltr">
                         {t.quantity}
@@ -335,7 +420,7 @@ export const EntityDetails: React.FC = () => {
             )}
             
             <div style={{ marginTop: 'auto', paddingTop: '32px', textAlign: 'center' }}>
-              <p style={{ fontSize: '10px', color: '#94a3b8', margin: 0 }}>تم إنشاء هذا التقرير بواسطة تطبيق نظام إدارة المخزون</p>
+              <p style={{ fontSize: '10px', color: '#94a3b8', margin: 0 }}>تم إنشاء هذا التقرير بواسطة تطبيق Gloves</p>
             </div>
           </div>
         ))}

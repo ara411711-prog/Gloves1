@@ -16,6 +16,8 @@ type InventoryContextType = {
   addEntity: (entity: Omit<Entity, 'id' | 'createdAt' | 'updatedAt'>) => Promise<void>;
   updateEntity: (id: string, entity: Partial<Entity>) => Promise<void>;
   deleteEntity: (id: string) => Promise<void>;
+  deleteTransaction: (id: string, revertStock?: boolean) => Promise<void>;
+  deleteTransactions: (ids: string[], revertStock?: boolean) => Promise<void>;
   clearTransactions: () => Promise<void>;
 };
 
@@ -112,6 +114,30 @@ export const InventoryProvider: React.FC<{ children: React.ReactNode }> = ({ chi
       });
       
       await set(newProductRef, newProduct);
+
+      // Create an initial 'in' transaction if stock > 0
+      if (newProduct.stock > 0) {
+        const transactionsRef = ref(db, 'transactions');
+        const newTransactionRef = push(transactionsRef);
+        const transactionData = {
+          productId: newProductRef.key,
+          type: 'in',
+          quantity: newProduct.stock,
+          price: newProduct.cost,
+          total: newProduct.stock * newProduct.cost,
+          date: now,
+          entityId: newProduct.supplierId || undefined,
+        };
+        
+        // Remove undefined values
+        Object.keys(transactionData).forEach(key => {
+          if ((transactionData as any)[key] === undefined) {
+            delete (transactionData as any)[key];
+          }
+        });
+        
+        await set(newTransactionRef, transactionData);
+      }
     } catch (err) {
       console.error(err);
       throw new Error("فشل في إضافة المنتج");
@@ -241,6 +267,40 @@ export const InventoryProvider: React.FC<{ children: React.ReactNode }> = ({ chi
     }
   };
 
+  const deleteTransaction = async (id: string, revertStock: boolean = true) => {
+    try {
+      const transaction = transactions.find(t => t.id === id);
+      if (!transaction) return;
+
+      const transactionRef = ref(db, `transactions/${id}`);
+      
+      // Revert stock if requested
+      if (revertStock) {
+        const product = products.find(p => p.id === transaction.productId);
+        if (product) {
+          const stockRevert = transaction.type === 'in' ? -transaction.quantity : transaction.quantity;
+          await updateProduct(product.id, { stock: product.stock + stockRevert });
+        }
+      }
+
+      await remove(transactionRef);
+    } catch (err) {
+      console.error(err);
+      throw new Error("فشل في حذف العملية");
+    }
+  };
+
+  const deleteTransactions = async (ids: string[], revertStock: boolean = true) => {
+    try {
+      for (const id of ids) {
+        await deleteTransaction(id, revertStock);
+      }
+    } catch (err) {
+      console.error(err);
+      throw new Error("فشل في حذف العمليات");
+    }
+  };
+
   const clearTransactions = async () => {
     try {
       const transactionsRef = ref(db, 'transactions');
@@ -266,6 +326,8 @@ export const InventoryProvider: React.FC<{ children: React.ReactNode }> = ({ chi
         addEntity,
         updateEntity,
         deleteEntity,
+        deleteTransaction,
+        deleteTransactions,
         clearTransactions,
       }}
     >
